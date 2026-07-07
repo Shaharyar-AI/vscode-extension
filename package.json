@@ -1,0 +1,38 @@
+{
+  "name": "cr-track-skill",
+  "version": "0.5.1",
+  "description": "CodeRabbit-style pre-commit review skill for Claude Code. Installs the CR-Track skill into your repo's .claude/skills/ directory.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "skill",
+    "code-review",
+    "coderabbit",
+    "cr-track",
+    "pre-commit"
+  ],
+  "license": "MIT",
+  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hashi-ktk/code-review-skill.git"
+  },
+  "homepage": "https://github.com/Hashi-ktk/code-review-skill#readme",
+  "bugs": {
+    "url": "https://github.com/Hashi-ktk/code-review-skill/issues"
+  },
+  "bin": {
+    "cr-track-skill": "bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "skill/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "test": "node bin/cli.js --help"
+  }
+}
