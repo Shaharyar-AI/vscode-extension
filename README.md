@@ -1,4 +1,4 @@
-# code-review-skill (CR-Track)
+# claude-skills (CR-Track)
 
 Install the **CR-Track** code-review skill for [Claude Code](https://claude.com/claude-code) into any repo with a single command.
 
@@ -14,22 +14,22 @@ dashboard.
 Into the current repo (`./.claude/skills/cr-track`):
 
 ```bash
-npx github:Hashi-ktk/code-review-skill
+npx github:ikonic-git-admin/claude-skills
 ```
 
 Globally for every repo (`~/.claude/skills/cr-track`):
 
 ```bash
-npx github:Hashi-ktk/code-review-skill --global
+npx github:ikonic-git-admin/claude-skills --global
 ```
 
 Overwrite an existing install:
 
 ```bash
-npx github:Hashi-ktk/code-review-skill --force
+npx github:ikonic-git-admin/claude-skills --force
 ```
 
-Pin to a tag/branch with `#`, e.g. `npx github:Hashi-ktk/code-review-skill#v0.1.0`.
+Pin to a tag/branch with `#`, e.g. `npx github:ikonic-git-admin/claude-skills#v0.1.0`.
 
 ## Use
 
@@ -103,7 +103,7 @@ learnings_file: .cr-track/learnings.md
 ## CLI options
 
 ```
-npx github:Hashi-ktk/code-review-skill [options]
+npx github:ikonic-git-admin/claude-skills [options]
 
   -g, --global            Install into ~/.claude/skills/cr-track (every repo)
                           and write permissions to ~/.claude/settings.json
@@ -147,7 +147,7 @@ Edit the skill files, bump `version` in `package.json`, commit, and tag:
 git tag v0.1.1 && git push --tags
 ```
 
-Devs pick up a release with `npx github:Hashi-ktk/code-review-skill#v0.1.1`
+Devs pick up a release with `npx github:ikonic-git-admin/claude-skills#v0.1.1`
 (`npx` caches git installs, so pinning a tag gives controlled rollouts).
 
 ## License

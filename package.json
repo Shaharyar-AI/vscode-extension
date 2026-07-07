@@ -15,11 +15,11 @@
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Hashi-ktk/code-review-skill.git"
+    "url": "git+https://github.com/ikonic-git-admin/claude-skills.git"
   },
-  "homepage": "https://github.com/Hashi-ktk/code-review-skill#readme",
+  "homepage": "https://github.com/ikonic-git-admin/claude-skills#readme",
   "bugs": {
-    "url": "https://github.com/Hashi-ktk/code-review-skill/issues"
+    "url": "https://github.com/ikonic-git-admin/claude-skills/issues"
   },
   "bin": {
     "cr-track-skill": "bin/cli.js"
