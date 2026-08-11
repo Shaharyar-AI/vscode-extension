@@ -17,6 +17,10 @@ export class FixProvider implements vscode.CodeActionProvider, vscode.Disposable
   /** Finding id → what the developer did with it, for the report. */
   private readonly outcomes = new Map<string, { outcome: Outcome; reason?: string }>();
   private readonly disposables: vscode.Disposable[] = [];
+  private readonly outcomesChanged = new vscode.EventEmitter<void>();
+
+  /** Fires whenever a finding is accepted or rejected, so views can redraw. */
+  readonly onDidChangeOutcomes = this.outcomesChanged.event;
 
   constructor(private readonly view: DiagnosticsView) {
     // Resolved here rather than in a static field: a static initializer runs at
@@ -133,23 +137,41 @@ export class FixProvider implements vscode.CodeActionProvider, vscode.Disposable
       return;
     }
 
-    this.outcomes.set(finding.id, { outcome: "applied" });
-    this.view.remove(finding.id);
+    this.record(finding.id, { outcome: "applied" });
     log.info(`Applied ${finding.id} — ${finding.title}`);
   }
 
-  private async dismiss(finding: Finding): Promise<void> {
-    const reason = await vscode.window.showInputBox({
-      title: `Dismiss ${finding.id}`,
-      prompt: "Why? Recorded in the report, and used to suppress this in future reviews.",
-      placeHolder: "e.g. intentional — validated upstream",
-    });
-    // Escape cancels the dismissal entirely rather than dismissing blankly.
-    if (reason === undefined) return;
+  /** Apply without prompting — used by "accept all", which asks once up front. */
+  async applyQuiet(finding: Finding, repoRoot: string): Promise<boolean> {
+    if (!finding.fix || this.outcomes.has(finding.id)) return false;
+    const before = this.outcomes.size;
+    await this.apply(finding, vscode.Uri.joinPath(vscode.Uri.file(repoRoot), finding.file));
+    return this.outcomes.size > before;
+  }
 
-    this.outcomes.set(finding.id, { outcome: "dismissed", reason: reason.trim() || "not selected" });
-    this.view.remove(finding.id);
-    log.info(`Dismissed ${finding.id} — ${reason || "(no reason given)"}`);
+  async dismiss(finding: Finding, askReason = true): Promise<void> {
+    if (this.outcomes.has(finding.id)) return;
+
+    let reason: string | undefined = "not selected";
+    if (askReason) {
+      reason = await vscode.window.showInputBox({
+        title: `Reject ${finding.id} — ${finding.title}`,
+        prompt: "Why? Recorded in the report, and used to suppress this in future reviews.",
+        placeHolder: "e.g. intentional — validated upstream",
+      });
+      // Escape cancels the rejection entirely rather than rejecting blankly.
+      if (reason === undefined) return;
+      reason = reason.trim() || "no reason given";
+    }
+
+    this.record(finding.id, { outcome: "dismissed", reason });
+    log.info(`Rejected ${finding.id} — ${reason}`);
+  }
+
+  private record(id: string, value: { outcome: Outcome; reason?: string }): void {
+    this.outcomes.set(id, value);
+    this.view.remove(id);
+    this.outcomesChanged.fire();
   }
 
   /** The reviewed range, clamped to the document as it exists now. */
@@ -170,9 +192,11 @@ export class FixProvider implements vscode.CodeActionProvider, vscode.Disposable
 
   reset(): void {
     this.outcomes.clear();
+    this.outcomesChanged.fire();
   }
 
   dispose(): void {
+    this.outcomesChanged.dispose();
     for (const d of this.disposables) d.dispose();
   }
 }

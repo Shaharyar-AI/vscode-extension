@@ -52,6 +52,17 @@ const vscode = {
   CodeAction: class { constructor(title, kind) { Object.assign(this, { title, kind }); } },
   CodeActionKind: { QuickFix: { value: "quickfix" }, Refactor: { value: "refactor" } },
   TextEditorRevealType: { InCenter: 2 },
+  TreeItem: class { constructor(label, collapsibleState) { Object.assign(this, { label, collapsibleState }); } },
+  TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+  MarkdownString: class {
+    constructor() { this.value = ""; }
+    appendMarkdown(s) { this.value += s; return this; }
+    appendCodeblock(s) { this.value += "\n```\n" + s + "\n```\n"; return this; }
+  },
+  ThemeIcon: Object.assign(
+    class { constructor(id, color) { Object.assign(this, { id, color }); } },
+    { Folder: { id: "folder" }, File: { id: "file" } },
+  ),
   Diagnostic: class { constructor(range, message, severity) { Object.assign(this, { range, message, severity }); } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
   StatusBarAlignment: { Left: 1, Right: 2 },
@@ -77,6 +88,18 @@ const vscode = {
     showInputBox: async () => undefined,
     showTextDocument: async () => ({ revealRange() {}, set selection(_v) {} }),
     withProgress: async (_o, task) => task({ report() {} }, { isCancellationRequested: false }),
+    createTreeView: (id, opts) => {
+      const view = {
+        id,
+        provider: opts.treeDataProvider,
+        badge: undefined,
+        title: undefined,
+        reveal: async () => {},
+        dispose() {},
+      };
+      state.treeView = view;
+      return view;
+    },
   },
   workspace: {
     workspaceFolders: [{ uri: Uri.file(repo), name: path.basename(repo), index: 0 }],
@@ -142,9 +165,25 @@ Module._load = function (request, parent, isMain) {
 
   const total = [...state.diagnostics.values()].reduce((n, d) => n + d.length, 0);
   say(`smoke: ${total} diagnostic(s) across ${state.diagnostics.size} file(s)`);
-  for (const [uri, diags] of state.diagnostics) {
-    say(`  ${path.basename(uri)}`);
-    for (const d of diags) say(`    [${d.code}] ${String(d.message).split("\n")[0]}`);
+
+  // Walk the Findings tree exactly as VS Code would render it.
+  const p = state.treeView?.provider;
+  if (p) {
+    say(`smoke: tree title = "${state.treeView.title}", badge = ${JSON.stringify(state.treeView.badge)}`);
+    say("smoke: Findings panel —");
+    const walk = async (node, depth) => {
+      for (const child of (await p.getChildren(node)) ?? []) {
+        const item = await p.getTreeItem(child);
+        const inline = child.kind === "finding"
+          ? `   [${item.contextValue === "finding-fixable" ? "accept|reject" : "reject"}]`
+          : "";
+        say(`${"  ".repeat(depth + 1)}${item.label}${item.description ? `   ${item.description}` : ""}${inline}`);
+        await walk(child, depth + 1);
+      }
+    };
+    await walk(undefined, 0);
+  } else {
+    say("smoke: FAIL — no tree view was created");
   }
 
   ext.deactivate();

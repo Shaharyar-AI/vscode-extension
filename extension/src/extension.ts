@@ -7,7 +7,7 @@
  */
 
 import * as vscode from "vscode";
-import { askBeforeCommit, runGitCommit } from "./commit-gate";
+import { askBeforeCommit, reveal, runGitCommit } from "./commit-gate";
 import { readEndpoint, readSettings, type Settings } from "./config";
 import { DiagnosticsView } from "./diagnostics";
 import { FixProvider } from "./fixes";
@@ -15,12 +15,26 @@ import { initLog, log } from "./log";
 import { Orchestrator, type State } from "./orchestrator";
 import { checkStartup } from "./startup";
 import { StatusBar } from "./status";
+import { FindingsTree } from "./tree";
 import { IndexWatcher } from "./watcher";
 import { isRepo, readRepoContext } from "@engine/git";
+import type { Finding } from "@engine/types";
 import { buildReport, type FindingOutcome } from "@engine/report";
 import { deliver, flushQueue } from "@engine/telemetry";
 
 let session: Session | undefined;
+
+/**
+ * Tree-view menu commands arrive with the tree node; palette invocations may
+ * arrive with the finding itself, or with nothing at all.
+ */
+function findingOf(arg: unknown): Finding | undefined {
+  if (!arg || typeof arg !== "object") return undefined;
+  const node = arg as { kind?: string; finding?: Finding; id?: string };
+  if (node.kind === "finding" && node.finding) return node.finding;
+  if (typeof node.id === "string" && "severity" in node) return node as unknown as Finding;
+  return undefined;
+}
 
 /** Everything that exists only while a usable repo + CLI are present. */
 class Session implements vscode.Disposable {
@@ -32,12 +46,13 @@ class Session implements vscode.Disposable {
     readonly diagnostics: DiagnosticsView,
     readonly status: StatusBar,
     readonly fixes: FixProvider,
+    readonly tree: FindingsTree,
     readonly settings: () => Settings,
     readonly cliVersion: string | undefined,
     readonly extensionVersion: string,
     watcher: IndexWatcher,
   ) {
-    this.disposables.push(orchestrator, diagnostics, fixes, watcher);
+    this.disposables.push(orchestrator, diagnostics, fixes, tree, watcher);
 
     this.disposables.push(
       orchestrator.onDidChangeState((state) => {
@@ -111,8 +126,10 @@ class Session implements vscode.Disposable {
   private render(state: State): void {
     if (state.kind === "done") {
       this.diagnostics.show(state.outcome.findings);
+      this.tree.setFindings(state.outcome.findings);
     } else if (state.kind === "idle") {
       this.diagnostics.clear();
+      this.tree.clear();
     }
     // "running" and "failed" deliberately leave the previous findings on
     // screen — stale results beat a blank Problems panel mid-review.
@@ -190,6 +207,7 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
   const orchestrator = new Orchestrator(repo.root, gate.claudePath, settings);
   const diagnostics = new DiagnosticsView(repo.root);
   const fixes = new FixProvider(diagnostics);
+  const tree = new FindingsTree(repo.root, fixes);
   const watcher = new IndexWatcher(
     repo.root,
     () => settings().debounceMs,
@@ -206,6 +224,7 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
     diagnostics,
     status,
     fixes,
+    tree,
     settings,
     gate.version,
     context.extension?.packageJSON?.version ?? "0.0.0",
@@ -235,7 +254,9 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
 }
 
 function registerCommands(context: vscode.ExtensionContext, status: StatusBar): void {
-  const register = (id: string, fn: () => void | Promise<void>) =>
+  // Handlers invoked from a tree view or code action receive arguments; those
+  // invoked from the palette receive none. Accept both.
+  const register = (id: string, fn: (...args: any[]) => void | Promise<void>) =>
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
   register("crTrack.reviewStaged", async () => {
@@ -283,6 +304,65 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
   register("crTrack.clearFindings", () => {
     session?.orchestrator.reset();
     session?.diagnostics.clear();
+    session?.tree.clear();
+    session?.fixes.reset();
+  });
+
+  // ── Findings panel ────────────────────────────────────────────────────
+  register("crTrack.revealFinding", async (arg: unknown) => {
+    const finding = findingOf(arg);
+    if (finding && session) await reveal(finding, session.repoRoot);
+  });
+
+  register("crTrack.acceptFinding", async (arg: unknown) => {
+    const finding = findingOf(arg);
+    if (!finding || !session) return;
+    const uri = vscode.Uri.joinPath(vscode.Uri.file(session.repoRoot), finding.file);
+    await vscode.commands.executeCommand("crTrack.applyFix", finding, uri);
+  });
+
+  register("crTrack.rejectFinding", async (arg: unknown) => {
+    const finding = findingOf(arg);
+    if (finding && session) await session.fixes.dismiss(finding);
+  });
+
+  register("crTrack.acceptAll", async () => {
+    if (!session) return;
+    const fixable = session.tree.outstanding().filter((f) => f.fix);
+    if (fixable.length === 0) {
+      void vscode.window.showInformationMessage(
+        "CR-Track: nothing here has an automatic patch. Those findings need a human.",
+      );
+      return;
+    }
+
+    const choice = await vscode.window.showWarningMessage(
+      `Apply ${fixable.length} patch${fixable.length === 1 ? "" : "es"}?`,
+      { modal: true, detail: "Each is checked against the current file first; any that no longer match are skipped." },
+      "Apply all",
+    );
+    if (choice !== "Apply all") return;
+
+    let applied = 0;
+    for (const finding of fixable) {
+      if (await session.fixes.applyQuiet(finding, session.repoRoot)) applied++;
+    }
+    void vscode.window.showInformationMessage(
+      `CR-Track applied ${applied} of ${fixable.length} patch${fixable.length === 1 ? "" : "es"}.`,
+    );
+  });
+
+  register("crTrack.rejectAll", async () => {
+    if (!session) return;
+    const open = session.tree.outstanding();
+    if (open.length === 0) return;
+    const choice = await vscode.window.showWarningMessage(
+      `Reject all ${open.length} open finding(s)?`,
+      { modal: true },
+      "Reject all",
+    );
+    if (choice !== "Reject all") return;
+    for (const finding of open) await session.fixes.dismiss(finding, false);
   });
 
   register("crTrack.showOutput", () => log.show());

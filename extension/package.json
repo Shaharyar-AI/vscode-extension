@@ -43,7 +43,57 @@
       },
       { "command": "crTrack.applyFix", "title": "Apply Fix", "category": "CR-Track" },
       { "command": "crTrack.dismissFinding", "title": "Dismiss Finding", "category": "CR-Track" },
-      { "command": "crTrack.copySuggestion", "title": "Copy Suggestion", "category": "CR-Track" }
+      { "command": "crTrack.copySuggestion", "title": "Copy Suggestion", "category": "CR-Track" },
+      {
+        "command": "crTrack.acceptFinding",
+        "title": "Accept — apply this fix",
+        "category": "CR-Track",
+        "icon": "$(check)"
+      },
+      {
+        "command": "crTrack.rejectFinding",
+        "title": "Reject — dismiss with a reason",
+        "category": "CR-Track",
+        "icon": "$(close)"
+      },
+      {
+        "command": "crTrack.acceptAll",
+        "title": "Accept All Fixes",
+        "category": "CR-Track",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "crTrack.rejectAll",
+        "title": "Reject All Findings",
+        "category": "CR-Track",
+        "icon": "$(clear-all)"
+      },
+      { "command": "crTrack.revealFinding", "title": "Go to Finding", "category": "CR-Track" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "crTrackContainer",
+          "title": "CR-Track",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "crTrackContainer": [
+        {
+          "id": "crTrack.findings",
+          "name": "Findings",
+          "icon": "media/icon.svg",
+          "contextualTitle": "CR-Track Findings"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "crTrack.findings",
+        "contents": "No review yet.\n\nStage some changes and CR-Track reviews them automatically, or run one now.\n\n[Review staged changes](command:crTrack.reviewStaged)\n\n[Open the log](command:crTrack.showOutput)"
+      }
     ],
     "menus": {
       "scm/title": [
@@ -58,10 +108,57 @@
           "group": "inline@9"
         }
       ],
+      "view/title": [
+        {
+          "command": "crTrack.reviewStaged",
+          "when": "view == crTrack.findings",
+          "group": "navigation@1"
+        },
+        {
+          "command": "crTrack.acceptAll",
+          "when": "view == crTrack.findings",
+          "group": "navigation@2"
+        },
+        {
+          "command": "crTrack.rejectAll",
+          "when": "view == crTrack.findings",
+          "group": "navigation@3"
+        },
+        {
+          "command": "crTrack.clearFindings",
+          "when": "view == crTrack.findings",
+          "group": "overflow@1"
+        },
+        {
+          "command": "crTrack.showOutput",
+          "when": "view == crTrack.findings",
+          "group": "overflow@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "crTrack.acceptFinding",
+          "when": "view == crTrack.findings && viewItem == finding-fixable",
+          "group": "inline@1"
+        },
+        {
+          "command": "crTrack.rejectFinding",
+          "when": "view == crTrack.findings && viewItem =~ /^finding($|-fixable)/",
+          "group": "inline@2"
+        },
+        {
+          "command": "crTrack.copySuggestion",
+          "when": "view == crTrack.findings && viewItem =~ /^finding/",
+          "group": "context@1"
+        }
+      ],
       "commandPalette": [
         { "command": "crTrack.applyFix", "when": "false" },
         { "command": "crTrack.dismissFinding", "when": "false" },
-        { "command": "crTrack.copySuggestion", "when": "false" }
+        { "command": "crTrack.copySuggestion", "when": "false" },
+        { "command": "crTrack.acceptFinding", "when": "false" },
+        { "command": "crTrack.rejectFinding", "when": "false" },
+        { "command": "crTrack.revealFinding", "when": "false" }
       ]
     },
     "configuration": {
