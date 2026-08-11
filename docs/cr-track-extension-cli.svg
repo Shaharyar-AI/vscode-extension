@@ -1,0 +1,246 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="2030" viewBox="0 0 1840 2030">
+<defs>
+<marker id="mg" markerWidth="11" markerHeight="11" refX="8.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#047857"/></marker>
+<marker id="mv" markerWidth="11" markerHeight="11" refX="8.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#6D28D9"/></marker>
+<marker id="mo" markerWidth="11" markerHeight="11" refX="8.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#B45309"/></marker>
+<marker id="ms" markerWidth="11" markerHeight="11" refX="8.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#64748B"/></marker>
+</defs>
+<rect width="1840" height="2030" fill="#FFFFFF"/>
+<text x="70" y="62" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="34" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">CR-Track — VS Code extension, Claude CLI engine</text>
+<text x="70" y="96" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Everything runs on the developer's machine. The extension orchestrates; a short-lived `claude -p` child process does the reviewing.</text>
+<line x1="70" y1="136" x2="1770" y2="136" stroke="#CBD5E1" stroke-width="1.5"/>
+<circle cx="86" cy="162" r="15" fill="#0F172A"/>
+<text x="86" y="168" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">1</text>
+<text x="114" y="169" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="23" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Topology</text>
+<text x="114" y="194" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="14.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Two things leave the laptop: the CLI's own authenticated call, and the redacted report.</text>
+<rect x="70" y="210" width="1120" height="480" rx="18" fill="#FAFAFA" stroke="#475569" stroke-width="2" stroke-dasharray="10 7" opacity="1"/>
+<rect x="96" y="228" width="142" height="24" rx="12" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="167" y="244.5" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0.9">DEVELOPER LAPTOP</text>
+<rect x="103" y="286" width="520" height="384" rx="14" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="100" y="282" width="520" height="384" rx="14" fill="#ECFDF5" stroke="#047857" stroke-width="2.6" opacity="1"/>
+<text x="122" y="318" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="20" font-weight="700" fill="#047857" text-anchor="start" letter-spacing="0">VS Code Extension Host</text>
+<text x="122" y="340" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">TypeScript — all deterministic work</text>
+<rect x="120" y="358" width="234" height="60" rx="8" fill="#fff" stroke="#047857" stroke-width="1.4" opacity="1"/>
+<text x="134" y="394" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start" letter-spacing="0">CLI locator + version gate</text>
+<rect x="366" y="358" width="234" height="60" rx="8" fill="#fff" stroke="#047857" stroke-width="1.4" opacity="1"/>
+<text x="380" y="394" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start" letter-spacing="0">Index watcher (debounce 2s)</text>
+<rect x="120" y="432" width="234" height="60" rx="8" fill="#fff" stroke="#047857" stroke-width="1.4" opacity="1"/>
+<text x="134" y="468" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start" letter-spacing="0">Diff collector + hash</text>
+<rect x="366" y="432" width="234" height="60" rx="8" fill="#fff" stroke="#047857" stroke-width="1.4" opacity="1"/>
+<text x="380" y="468" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start" letter-spacing="0">Review cache</text>
+<rect x="120" y="506" width="234" height="60" rx="8" fill="#fff" stroke="#047857" stroke-width="1.4" opacity="1"/>
+<text x="134" y="542" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start" letter-spacing="0">Diagnostics + quick fixes</text>
+<rect x="366" y="506" width="234" height="60" rx="8" fill="#fff" stroke="#047857" stroke-width="1.4" opacity="1"/>
+<text x="380" y="542" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start" letter-spacing="0">Commit gate</text>
+<rect x="120" y="580" width="234" height="60" rx="8" fill="#fff" stroke="#047857" stroke-width="1.4" opacity="1"/>
+<text x="134" y="616" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start" letter-spacing="0">Fix applier (WorkspaceEdit)</text>
+<rect x="366" y="580" width="234" height="60" rx="8" fill="#fff" stroke="#047857" stroke-width="1.4" opacity="1"/>
+<text x="380" y="616" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start" letter-spacing="0">Report builder + redactor</text>
+<rect x="723" y="304" width="434" height="176" rx="14" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="720" y="300" width="434" height="176" rx="14" fill="#F5F3FF" stroke="#6D28D9" stroke-width="2.6" opacity="1"/>
+<text x="742" y="340" font-family="Consolas,'Cascadia Mono',monospace" font-size="22" font-weight="700" fill="#6D28D9" text-anchor="start" letter-spacing="0">claude -p</text>
+<rect x="910" y="322" width="119.5" height="24" rx="12" fill="#6D28D9" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="969.75" y="338.5" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0.9">CHILD PROCESS</text>
+<text x="742" y="374" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">· Read / Grep / Glob only — no Write, no Bash</text>
+<text x="742" y="398" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">· Scoped to the repo via --add-dir</text>
+<text x="742" y="422" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">· Schema-validated JSON on stdout</text>
+<text x="742" y="446" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">· Killed the moment the dev stages again</text>
+<rect x="723" y="516" width="434" height="132" rx="14" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="720" y="512" width="434" height="132" rx="14" fill="#F0F9FF" stroke="#0369A1" stroke-width="2.2" opacity="1"/>
+<text x="742" y="550" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="19" font-weight="700" fill="#0369A1" text-anchor="start" letter-spacing="0">Workspace + .git</text>
+<text x="742" y="578" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">staged diff in · source files read for context</text>
+<text x="742" y="602" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">.cr-track/last-review.json written here</text>
+<text x="742" y="626" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">.cr-track/queue/ holds unsent reports</text>
+<rect x="1253" y="304" width="520" height="176" rx="14" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1250" y="300" width="520" height="176" rx="14" fill="#fff" stroke="#B45309" stroke-width="2.6" opacity="1"/>
+<rect x="1250" y="300" width="6" height="176" rx="3" fill="#B45309" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="1272" y="340" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="20" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Anthropic API</text>
+<text x="1272" y="370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Called by the CLI, not by the extension</text>
+<text x="1272" y="393" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Authenticated as the developer's own account</text>
+<text x="1272" y="416" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">claude-opus-5 · effort medium</text>
+<text x="1272" y="439" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Rate limits + billing are per developer</text>
+<rect x="1253" y="516" width="520" height="176" rx="14" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1250" y="512" width="520" height="176" rx="14" fill="#fff" stroke="#B45309" stroke-width="2.6" opacity="1"/>
+<rect x="1250" y="512" width="6" height="176" rx="3" fill="#B45309" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="1272" y="552" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="20" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Your dashboard</text>
+<text x="1272" y="582" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">POSTed by the extension, after redaction</text>
+<text x="1272" y="605" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Metadata + one-line summaries only</text>
+<text x="1272" y="628" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Never file contents, diffs, or secrets</text>
+<text x="1272" y="651" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Failure queues on disk and retries</text>
+<path d="M620,360 L720,360" fill="none" stroke="#6D28D9" stroke-width="3" stroke-linejoin="round" marker-end="url(#mv)"/>
+<text x="670" y="344" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#6D28D9" text-anchor="middle" letter-spacing="0">spawn</text>
+<text x="670" y="392" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#6D28D9" text-anchor="middle" letter-spacing="0">diff on stdin</text>
+<path d="M720,424 L620,424" fill="none" stroke="#6D28D9" stroke-width="2.3" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#mv)"/>
+<text x="670" y="446" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#6D28D9" text-anchor="middle" letter-spacing="0">findings JSON</text>
+<path d="M937,476 L937,512" fill="none" stroke="#0369A1" stroke-width="2.3" stroke-dasharray="6 5" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M620,600 L720,600" fill="none" stroke="#0369A1" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M1154,372 L1250,372" fill="none" stroke="#B45309" stroke-width="3" stroke-linejoin="round" marker-end="url(#mo)"/>
+<path d="M1190,600 L1250,600" fill="none" stroke="#B45309" stroke-width="3" stroke-linejoin="round" marker-end="url(#mo)"/>
+<rect x="1196" y="232" width="176" height="52" rx="8" fill="#FFF7ED" stroke="#B45309" stroke-width="1.4" stroke-dasharray="6 4" opacity="1"/>
+<text x="1284" y="253" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#B45309" text-anchor="middle" letter-spacing="0.8">TRUST BOUNDARY</text>
+<text x="1284" y="272" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11" font-weight="400" fill="#5B6B82" text-anchor="middle" letter-spacing="0">only egress from the laptop</text>
+<line x1="70" y1="728" x2="1770" y2="728" stroke="#CBD5E1" stroke-width="1.5"/>
+<circle cx="86" cy="754" r="15" fill="#0F172A"/>
+<text x="86" y="760" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">2</text>
+<text x="114" y="761" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="23" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">The everyday loop</text>
+<text x="114" y="786" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="14.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Review happens while the developer is still writing. Nothing blocks until there is something genuinely blocking.</text>
+<rect x="73" y="816" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="812" width="400" height="106" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="70" y="812" width="6" height="106" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="108" cy="845" r="17" fill="#475569"/>
+<text x="108" y="851" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">1</text>
+<text x="136" y="851" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Stage files</text>
+<text x="92" y="882" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">git add — nothing is blocked</text>
+<rect x="513" y="816" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="510" y="812" width="400" height="106" rx="12" fill="#fff" stroke="#047857" stroke-width="2" opacity="1"/>
+<rect x="510" y="812" width="6" height="106" rx="3" fill="#047857" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="548" cy="845" r="17" fill="#047857"/>
+<text x="548" y="851" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">2</text>
+<text x="576" y="851" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Debounce 2s</text>
+<text x="532" y="882" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">wait for the index to settle</text>
+<rect x="953" y="816" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="950" y="812" width="400" height="106" rx="12" fill="#fff" stroke="#047857" stroke-width="2" opacity="1"/>
+<rect x="950" y="812" width="6" height="106" rx="3" fill="#047857" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="988" cy="845" r="17" fill="#047857"/>
+<text x="988" y="851" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">3</text>
+<text x="1016" y="851" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Hash the diff</text>
+<text x="972" y="882" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">diff + ruleset + model + effort</text>
+<rect x="1393" y="816" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1390" y="812" width="400" height="106" rx="12" fill="#fff" stroke="#047857" stroke-width="2" opacity="1"/>
+<rect x="1390" y="812" width="6" height="106" rx="3" fill="#047857" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="1428" cy="845" r="17" fill="#047857"/>
+<text x="1428" y="851" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">4</text>
+<text x="1456" y="851" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Cache lookup</text>
+<text x="1412" y="882" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">hit → jump straight to step 8</text>
+<rect x="73" y="962" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="958" width="400" height="106" rx="12" fill="#fff" stroke="#6D28D9" stroke-width="2" opacity="1"/>
+<rect x="70" y="958" width="6" height="106" rx="3" fill="#6D28D9" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="108" cy="991" r="17" fill="#6D28D9"/>
+<text x="108" y="997" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">5</text>
+<text x="136" y="997" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Spawn claude -p</text>
+<text x="92" y="1028" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">diff piped on stdin, handle retained</text>
+<rect x="513" y="962" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="510" y="958" width="400" height="106" rx="12" fill="#fff" stroke="#6D28D9" stroke-width="2" opacity="1"/>
+<rect x="510" y="958" width="6" height="106" rx="3" fill="#6D28D9" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="548" cy="991" r="17" fill="#6D28D9"/>
+<text x="548" y="997" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">6</text>
+<text x="576" y="997" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Read-only review</text>
+<text x="532" y="1028" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Read / Grep / Glob inside the repo</text>
+<rect x="953" y="962" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="950" y="958" width="400" height="106" rx="12" fill="#fff" stroke="#6D28D9" stroke-width="2" opacity="1"/>
+<rect x="950" y="958" width="6" height="106" rx="3" fill="#6D28D9" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="988" cy="991" r="17" fill="#6D28D9"/>
+<text x="988" y="997" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">7</text>
+<text x="1016" y="997" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Schema-valid JSON</text>
+<text x="972" y="1028" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">filter by threshold, assign stable ids</text>
+<rect x="1393" y="962" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1390" y="958" width="400" height="106" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="1390" y="958" width="6" height="106" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="1428" cy="991" r="17" fill="#475569"/>
+<text x="1428" y="997" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">8</text>
+<text x="1456" y="997" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Squiggles appear</text>
+<text x="1412" y="1028" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Problems panel + quick fixes · non-blocking</text>
+<rect x="73" y="1108" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="1104" width="400" height="106" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="70" y="1104" width="6" height="106" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="108" cy="1137" r="17" fill="#475569"/>
+<text x="108" y="1143" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">9</text>
+<text x="136" y="1143" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Developer commits</text>
+<text x="92" y="1174" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">types a message, hits commit</text>
+<rect x="513" y="1108" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="510" y="1104" width="400" height="106" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="510" y="1104" width="6" height="106" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="548" cy="1137" r="17" fill="#475569"/>
+<text x="548" y="1143" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">10</text>
+<text x="576" y="1143" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Gate on `blocking`</text>
+<text x="532" y="1174" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">fix, or override with a written reason</text>
+<rect x="953" y="1108" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="950" y="1104" width="400" height="106" rx="12" fill="#fff" stroke="#047857" stroke-width="2" opacity="1"/>
+<rect x="950" y="1104" width="6" height="106" rx="3" fill="#047857" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="988" cy="1137" r="17" fill="#047857"/>
+<text x="988" y="1143" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">11</text>
+<text x="1016" y="1143" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Apply fixes + report</text>
+<text x="972" y="1174" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">WorkspaceEdit · git meta · redact</text>
+<rect x="1393" y="1108" width="400" height="106" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1390" y="1104" width="400" height="106" rx="12" fill="#fff" stroke="#B45309" stroke-width="2" opacity="1"/>
+<rect x="1390" y="1104" width="6" height="106" rx="3" fill="#B45309" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="1428" cy="1137" r="17" fill="#B45309"/>
+<text x="1428" y="1143" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">12</text>
+<text x="1456" y="1143" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Local JSON + webhook</text>
+<text x="1412" y="1174" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.8" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">queues on failure — commit never blocked</text>
+<path d="M470,865 L510,865" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M910,865 L950,865" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M1350,865 L1390,865" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M470,1011 L510,1011" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M910,1011 L950,1011" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M1350,1011 L1390,1011" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M470,1157 L510,1157" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M910,1157 L950,1157" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M1350,1157 L1390,1157" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M1590,918 L1590,938 L270,938 L270,956" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#ms)"/>
+<path d="M1590,1064 L1590,1084 L270,1084 L270,1102" fill="none" stroke="#94A3B8" stroke-width="2.3" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#ms)"/>
+<line x1="70" y1="1268" x2="1770" y2="1268" stroke="#CBD5E1" stroke-width="1.5"/>
+<circle cx="86" cy="1294" r="15" fill="#0F172A"/>
+<text x="86" y="1300" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">3</text>
+<text x="114" y="1301" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="23" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">The invocation</text>
+<text x="114" y="1326" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="14.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">One command per review. Every constraint is a flag, not a paragraph of prompt text.</text>
+<rect x="73" y="1354" width="1010" height="300" rx="14" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="1350" width="1010" height="300" rx="14" fill="#0B1220" stroke="#1E293B" stroke-width="2" opacity="1"/>
+<circle cx="96" cy="1376" r="6" fill="#EF4444"/>
+<circle cx="116" cy="1376" r="6" fill="#F59E0B"/>
+<circle cx="136" cy="1376" r="6" fill="#22C55E"/>
+<text x="170" y="1381" font-family="Consolas,'Cascadia Mono',monospace" font-size="12" font-weight="400" fill="#64748B" text-anchor="start" letter-spacing="0">spawned by the extension — never shown to the developer</text>
+<text x="96" y="1418" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#22C55E" font-weight="700" xml:space="preserve">$ </tspan><tspan fill="#F1F5F9" font-weight="700" xml:space="preserve">claude -p </tspan><tspan fill="#94A3B8" xml:space="preserve">\</tspan></text>
+<text x="96" y="1442" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#7DD3FC" xml:space="preserve">    --model </tspan><tspan fill="#86EFAC" xml:space="preserve">claude-opus-5</tspan><tspan fill="#7DD3FC" xml:space="preserve">  --effort </tspan><tspan fill="#86EFAC" xml:space="preserve">medium</tspan><tspan fill="#94A3B8" xml:space="preserve">  \</tspan></text>
+<text x="96" y="1466" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#7DD3FC" xml:space="preserve">    --tools </tspan><tspan fill="#86EFAC" xml:space="preserve">"Read,Grep,Glob"</tspan><tspan fill="#7DD3FC" xml:space="preserve">  --permission-mode </tspan><tspan fill="#86EFAC" xml:space="preserve">dontAsk</tspan><tspan fill="#94A3B8" xml:space="preserve">  \</tspan></text>
+<text x="96" y="1490" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#7DD3FC" xml:space="preserve">    --append-system-prompt-file </tspan><tspan fill="#86EFAC" xml:space="preserve">&lt;ruleset + language guides&gt;</tspan><tspan fill="#94A3B8" xml:space="preserve">  \</tspan></text>
+<text x="96" y="1514" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#7DD3FC" xml:space="preserve">    --json-schema </tspan><tspan fill="#86EFAC" xml:space="preserve">&lt;findings schema&gt;</tspan><tspan fill="#7DD3FC" xml:space="preserve">  --output-format </tspan><tspan fill="#86EFAC" xml:space="preserve">json</tspan><tspan fill="#94A3B8" xml:space="preserve">  \</tspan></text>
+<text x="96" y="1538" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#7DD3FC" xml:space="preserve">    --add-dir </tspan><tspan fill="#86EFAC" xml:space="preserve">&lt;repo root&gt;</tspan><tspan fill="#7DD3FC" xml:space="preserve">  --max-budget-usd </tspan><tspan fill="#86EFAC" xml:space="preserve">0.50</tspan><tspan fill="#94A3B8" xml:space="preserve">  \</tspan></text>
+<text x="96" y="1562" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#7DD3FC" xml:space="preserve">    --no-session-persistence</tspan></text>
+<text x="96" y="1594" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#F1F5F9" font-weight="700" xml:space="preserve">  &lt; staged.diff</tspan><tspan fill="#64748B" xml:space="preserve">    # stdin, NOT argv</tspan></text>
+<text x="96" y="1618" font-family="Consolas,'Cascadia Mono',monospace" font-size="15" xml:space="preserve"><tspan fill="#64748B" xml:space="preserve">                    # Windows caps a command line at ~32,000 chars</tspan></text>
+<text x="1110" y="1358" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">What each flag buys you</text>
+<rect x="1110" y="1386" width="660" height="40" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2" opacity="1"/>
+<text x="1122" y="1404" font-family="Consolas,'Cascadia Mono',monospace" font-size="12.5" font-weight="700" fill="#6D28D9" text-anchor="start" letter-spacing="0">--tools</text>
+<text x="1122" y="1420" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.2" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Hard read-only. No Write, no Bash, no network from the model — enforced, not requested.</text>
+<rect x="1110" y="1432" width="660" height="40" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2" opacity="1"/>
+<text x="1122" y="1450" font-family="Consolas,'Cascadia Mono',monospace" font-size="12.5" font-weight="700" fill="#6D28D9" text-anchor="start" letter-spacing="0">--json-schema</text>
+<text x="1122" y="1466" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.2" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Validated findings or a loud failure. Deletes the whole parse-and-retry loop.</text>
+<rect x="1110" y="1478" width="660" height="40" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2" opacity="1"/>
+<text x="1122" y="1496" font-family="Consolas,'Cascadia Mono',monospace" font-size="12.5" font-weight="700" fill="#6D28D9" text-anchor="start" letter-spacing="0">--append-system-prompt-file</text>
+<text x="1122" y="1512" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.2" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Ruleset and language guides ship with the extension and version with it.</text>
+<rect x="1110" y="1524" width="660" height="40" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2" opacity="1"/>
+<text x="1122" y="1542" font-family="Consolas,'Cascadia Mono',monospace" font-size="12.5" font-weight="700" fill="#6D28D9" text-anchor="start" letter-spacing="0">--max-budget-usd</text>
+<text x="1122" y="1558" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.2" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Per-review ceiling. A runaway review cannot drain a developer's day.</text>
+<rect x="1110" y="1570" width="660" height="40" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2" opacity="1"/>
+<text x="1122" y="1588" font-family="Consolas,'Cascadia Mono',monospace" font-size="12.5" font-weight="700" fill="#6D28D9" text-anchor="start" letter-spacing="0">--no-session-persistence</text>
+<text x="1122" y="1604" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.2" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Reviews stay out of the developer's own session history.</text>
+<rect x="1110" y="1616" width="660" height="40" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.2" opacity="1"/>
+<text x="1122" y="1634" font-family="Consolas,'Cascadia Mono',monospace" font-size="12.5" font-weight="700" fill="#6D28D9" text-anchor="start" letter-spacing="0">stdin, not argv</text>
+<text x="1122" y="1650" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.2" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">The only way large diffs survive on Windows.</text>
+<line x1="70" y1="1688" x2="1770" y2="1688" stroke="#CBD5E1" stroke-width="1.5"/>
+<circle cx="86" cy="1714" r="15" fill="#0F172A"/>
+<text x="86" y="1720" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">4</text>
+<text x="114" y="1721" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="23" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">First run, and how it fails</text>
+<text x="114" y="1746" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="14.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">The CLI is a dependency you do not control. Treat every failure as “review skipped”, never “commit blocked”.</text>
+<rect x="70" y="1770" width="860" height="210" rx="12" fill="#ECFDF5" stroke="#047857" stroke-width="2" opacity="1"/>
+<text x="90" y="1804" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#047857" text-anchor="start" letter-spacing="0">First run — once per machine</text>
+<text x="90" y="1832" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">1 · Locate the CLI</text>
+<text x="320" y="1832" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">PATH → known install dirs → claude.path setting</text>
+<text x="90" y="1862" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">2 · Gate on version</text>
+<text x="320" y="1862" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">below the pinned minimum → stay dormant</text>
+<text x="90" y="1892" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">3 · Probe auth</text>
+<text x="320" y="1892" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">not logged in → prompt once, never nag again</text>
+<text x="90" y="1922" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">4 · Read .cr-track.yaml</text>
+<text x="320" y="1922" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">profile, categories, severity threshold</text>
+<rect x="970" y="1770" width="800" height="210" rx="12" fill="#FFF1F2" stroke="#BE123C" stroke-width="2" opacity="1"/>
+<text x="990" y="1804" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#BE123C" text-anchor="start" letter-spacing="0">Fails safe — the commit always wins</text>
+<text x="990" y="1832" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">CLI missing / old</text>
+<text x="1220" y="1832" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">dormant + one notification</text>
+<text x="990" y="1862" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Not signed in</text>
+<text x="1220" y="1862" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">skip review, prompt once</text>
+<text x="990" y="1892" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Review still running</text>
+<text x="1220" y="1892" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">progress toast + “commit anyway”</text>
+<text x="990" y="1922" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Offline or API error</text>
+<text x="1220" y="1922" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">skip, queue the report, commit proceeds</text>
+</svg>

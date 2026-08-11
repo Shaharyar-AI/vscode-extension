@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="1800" viewBox="0 0 1840 1800">
+<defs>
+<marker id="a1" markerWidth="11" markerHeight="11" refX="8.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#64748B"/></marker>
+<marker id="a2" markerWidth="11" markerHeight="11" refX="8.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#6D28D9"/></marker>
+<marker id="a3" markerWidth="11" markerHeight="11" refX="8.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 z" fill="#4338CA"/></marker>
+</defs>
+<rect width="1840" height="1800" fill="#FFFFFF"/>
+<text x="70" y="62" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="34" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">CR-Track — revised architecture</text>
+<text x="70" y="96" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">PR-first and backend-owned. The service is the product; the extension is a thin client on top of it.</text>
+<line x1="70" y1="148" x2="1770" y2="148" stroke="#CBD5E1" stroke-width="1.5"/>
+<circle cx="86" cy="172" r="15" fill="#0F172A"/>
+<text x="86" y="178" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">1</text>
+<text x="114" y="179" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="23" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">System topology</text>
+<text x="114" y="204" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="14.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">The Anthropic API key exists in exactly one place. Every surface calls the same engine.</text>
+<rect x="73" y="244" width="380" height="178" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="240" width="380" height="178" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2.6" opacity="1"/>
+<rect x="70" y="240" width="6" height="178" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<rect x="92" y="260" width="143.6" height="24" rx="12" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="163.8" y="276.5" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0.9">SYSTEM OF RECORD</text>
+<text x="92" y="314" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="21" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">GitHub PR check</text>
+<text x="92" y="344" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">GitHub App on pull_request</text>
+<text x="92" y="366" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Non-bypassable · full coverage</text>
+<text x="92" y="388" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Zero per-developer install</text>
+<rect x="73" y="452" width="380" height="178" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="448" width="380" height="178" rx="12" fill="#fff" stroke="#475569" stroke-width="2" stroke-dasharray="8 6" opacity="1"/>
+<rect x="70" y="448" width="6" height="178" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<rect x="92" y="468" width="82.8" height="24" rx="12" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="133.4" y="484.5" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0.9">OPTIONAL</text>
+<text x="92" y="522" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="21" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">VS Code extension</text>
+<text x="92" y="552" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Thin client — holds no API key</text>
+<text x="92" y="574" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Fast pre-check before pushing</text>
+<text x="92" y="596" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Same backend, same ruleset</text>
+<rect x="513" y="236" width="740" height="480" rx="16" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="510" y="232" width="740" height="480" rx="16" fill="#ECFDF5" stroke="#047857" stroke-width="3" opacity="1"/>
+<text x="538" y="274" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="22" font-weight="700" fill="#047857" text-anchor="start" letter-spacing="0">BACKEND — Review Service</text>
+<rect x="538" y="290" width="196.79999999999998" height="24" rx="12" fill="#047857" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="636.4" y="306.5" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="11.5" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0.9">API KEY LIVES ONLY HERE</text>
+<text x="744.8" y="308" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">ruleset version + model config too</text>
+<rect x="538" y="338" width="330" height="76" rx="10" fill="#fff" stroke="#047857" stroke-width="1.6" opacity="1"/>
+<text x="554" y="368" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Auth &amp; tenancy</text>
+<text x="554" y="393" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">per-org, per-repo scoping</text>
+<rect x="892" y="338" width="330" height="76" rx="10" fill="#fff" stroke="#047857" stroke-width="1.6" opacity="1"/>
+<text x="908" y="368" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Ruleset registry</text>
+<text x="908" y="393" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">versioned — no client update</text>
+<rect x="538" y="428" width="330" height="76" rx="10" fill="#fff" stroke="#047857" stroke-width="1.6" opacity="1"/>
+<text x="554" y="458" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Context Packer</text>
+<text x="554" y="483" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">changed files + imports</text>
+<rect x="892" y="428" width="330" height="76" rx="10" fill="#fff" stroke="#047857" stroke-width="1.6" opacity="1"/>
+<text x="908" y="458" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Review Engine</text>
+<text x="908" y="483" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">schema-enforced call</text>
+<rect x="538" y="518" width="330" height="76" rx="10" fill="#fff" stroke="#047857" stroke-width="1.6" opacity="1"/>
+<text x="554" y="548" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Result cache</text>
+<text x="554" y="573" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">org-wide, keyed by diff hash</text>
+<rect x="892" y="518" width="330" height="76" rx="10" fill="#fff" stroke="#047857" stroke-width="1.6" opacity="1"/>
+<text x="908" y="548" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Redactor + Report Builder</text>
+<text x="908" y="573" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">secrets never leave</text>
+<rect x="538" y="608" width="684" height="76" rx="10" fill="#fff" stroke="#047857" stroke-width="1.6" opacity="1"/>
+<text x="554" y="638" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="16" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Ingest DB</text>
+<text x="554" y="663" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">reviews · findings · accept/dismiss outcomes · coverage — server-observed, never client-reported</text>
+<rect x="1373" y="262" width="400" height="200" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1370" y="258" width="400" height="200" rx="12" fill="#fff" stroke="#6D28D9" stroke-width="2.6" opacity="1"/>
+<rect x="1370" y="258" width="6" height="200" rx="3" fill="#6D28D9" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="1392" y="298" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="21" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Anthropic API</text>
+<text x="1392" y="328" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">claude-opus-5 · effort: medium</text>
+<text x="1392" y="351" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">thinking on (counts toward max_tokens)</text>
+<text x="1392" y="374" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">org-scoped prompt cache — one warm</text>
+<text x="1392" y="397" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">prefix shared by every developer</text>
+<text x="1392" y="420" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">json_schema enforced output</text>
+<rect x="1373" y="516" width="400" height="200" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1370" y="512" width="400" height="200" rx="12" fill="#fff" stroke="#B45309" stroke-width="2.6" opacity="1"/>
+<rect x="1370" y="512" width="6" height="200" rx="3" fill="#B45309" stroke="none" stroke-width="1.5" opacity="1"/>
+<text x="1392" y="552" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="21" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Dashboard</text>
+<text x="1392" y="582" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Review coverage over time</text>
+<text x="1392" y="605" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Category + severity mix</text>
+<text x="1392" y="628" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Accept / dismiss rates</text>
+<text x="1392" y="651" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Trends, not developer rankings</text>
+<text x="1392" y="674" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Flags PRs that shipped unreviewed</text>
+<path d="M450,329 L510,329" fill="none" stroke="#4338CA" stroke-width="3" stroke-linejoin="round" marker-end="url(#a3)"/>
+<path d="M450,537 L510,537" fill="none" stroke="#475569" stroke-width="2.3" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#a1)"/>
+<path d="M1250,330 L1370,330" fill="none" stroke="#6D28D9" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a2)"/>
+<path d="M1370,392 L1250,392" fill="none" stroke="#6D28D9" stroke-width="2.3" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#a2)"/>
+<text x="1310" y="318" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12" font-weight="700" fill="#6D28D9" text-anchor="middle" letter-spacing="0">request</text>
+<text x="1310" y="414" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="12" font-weight="700" fill="#6D28D9" text-anchor="middle" letter-spacing="0">findings</text>
+<path d="M1250,600 L1370,600" fill="none" stroke="#B45309" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a1)"/>
+<line x1="70" y1="770" x2="1770" y2="770" stroke="#CBD5E1" stroke-width="1.5"/>
+<circle cx="86" cy="794" r="15" fill="#0F172A"/>
+<text x="86" y="800" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">2</text>
+<text x="114" y="801" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="23" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Primary flow — pull-request review</text>
+<text x="114" y="826" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="14.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">The system of record. Runs on every PR, cannot be skipped, reviews a coherent change instead of WIP commits.</text>
+<rect x="73" y="866" width="400" height="108" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="862" width="400" height="108" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2" opacity="1"/>
+<rect x="70" y="862" width="6" height="108" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="108" cy="896" r="17" fill="#4338CA"/>
+<text x="108" y="902" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">1</text>
+<text x="136" y="902" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Developer opens / updates PR</text>
+<text x="92" y="934" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">push to a branch on GitHub</text>
+<text x="92" y="954" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="513" y="866" width="400" height="108" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="510" y="862" width="400" height="108" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2" opacity="1"/>
+<rect x="510" y="862" width="6" height="108" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="548" cy="896" r="17" fill="#4338CA"/>
+<text x="548" y="902" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">2</text>
+<text x="576" y="902" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Webhook → backend</text>
+<text x="532" y="934" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">signed delivery, verified server-side</text>
+<text x="532" y="954" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="953" y="866" width="400" height="108" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="950" y="862" width="400" height="108" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2" opacity="1"/>
+<rect x="950" y="862" width="6" height="108" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="988" cy="896" r="17" fill="#4338CA"/>
+<text x="988" y="902" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">3</text>
+<text x="1016" y="902" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Fetch the diff server-side</text>
+<text x="972" y="934" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">trusted source — not client-reported</text>
+<text x="972" y="954" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="1393" y="866" width="400" height="108" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1390" y="862" width="400" height="108" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2" opacity="1"/>
+<rect x="1390" y="862" width="6" height="108" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="1428" cy="896" r="17" fill="#4338CA"/>
+<text x="1428" y="902" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">4</text>
+<text x="1456" y="902" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Pack context</text>
+<text x="1412" y="934" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">changed files + imports + versioned ruleset</text>
+<text x="1412" y="954" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="73" y="1014" width="400" height="108" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="1010" width="400" height="108" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2" opacity="1"/>
+<rect x="70" y="1010" width="6" height="108" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="108" cy="1044" r="17" fill="#4338CA"/>
+<text x="108" y="1050" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">5</text>
+<text x="136" y="1050" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Claude review</text>
+<text x="92" y="1082" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">one schema-enforced call, cached prefix</text>
+<text x="92" y="1102" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="513" y="1014" width="400" height="108" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="510" y="1010" width="400" height="108" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2" opacity="1"/>
+<rect x="510" y="1010" width="6" height="108" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="548" cy="1044" r="17" fill="#4338CA"/>
+<text x="548" y="1050" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">6</text>
+<text x="576" y="1050" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Post back to the PR</text>
+<text x="532" y="1082" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">inline comments + check status = the real gate</text>
+<text x="532" y="1102" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="953" y="1014" width="400" height="108" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="950" y="1010" width="400" height="108" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2" opacity="1"/>
+<rect x="950" y="1010" width="6" height="108" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="988" cy="1044" r="17" fill="#4338CA"/>
+<text x="988" y="1050" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">7</text>
+<text x="1016" y="1050" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Persist to ingest DB</text>
+<text x="972" y="1082" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">findings, outcomes, coverage</text>
+<text x="972" y="1102" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="1393" y="1014" width="400" height="108" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1390" y="1010" width="400" height="108" rx="12" fill="#fff" stroke="#4338CA" stroke-width="2" opacity="1"/>
+<rect x="1390" y="1010" width="6" height="108" rx="3" fill="#4338CA" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="1428" cy="1044" r="17" fill="#4338CA"/>
+<text x="1428" y="1050" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">8</text>
+<text x="1456" y="1050" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Dashboard updates</text>
+<text x="1412" y="1082" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">team trends, reviewed-vs-shipped coverage</text>
+<text x="1412" y="1102" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<path d="M470,916 L510,916" fill="none" stroke="#4338CA" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a3)"/>
+<path d="M910,916 L950,916" fill="none" stroke="#4338CA" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a3)"/>
+<path d="M1350,916 L1390,916" fill="none" stroke="#4338CA" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a3)"/>
+<path d="M470,1064 L510,1064" fill="none" stroke="#4338CA" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a3)"/>
+<path d="M910,1064 L950,1064" fill="none" stroke="#4338CA" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a3)"/>
+<path d="M1350,1064 L1390,1064" fill="none" stroke="#4338CA" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a3)"/>
+<path d="M1590,970 L1590,990 L270,990 L270,1008" fill="none" stroke="#4338CA" stroke-width="2.3" stroke-dasharray="7 5" stroke-linejoin="round" marker-end="url(#a3)"/>
+<line x1="70" y1="1238" x2="1770" y2="1238" stroke="#CBD5E1" stroke-width="1.5"/>
+<circle cx="86" cy="1262" r="15" fill="#0F172A"/>
+<text x="86" y="1268" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">3</text>
+<text x="114" y="1269" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="23" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Secondary flow — local pre-check in VS Code</text>
+<text x="114" y="1294" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="14.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Optional convenience so problems surface before push. Same backend, same ruleset, no API key on the laptop.</text>
+<rect x="73" y="1334" width="326" height="104" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="70" y="1330" width="326" height="104" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="70" y="1330" width="6" height="104" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="108" cy="1364" r="17" fill="#475569"/>
+<text x="108" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">1</text>
+<text x="136" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">git add</text>
+<text x="92" y="1402" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">extension debounces 2s</text>
+<text x="92" y="1422" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="421" y="1334" width="326" height="104" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="418" y="1330" width="326" height="104" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="418" y="1330" width="6" height="104" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="456" cy="1364" r="17" fill="#475569"/>
+<text x="456" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">2</text>
+<text x="484" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">POST diff to backend</text>
+<text x="440" y="1402" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">session auth, no key on disk</text>
+<text x="440" y="1422" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="769" y="1334" width="326" height="104" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="766" y="1330" width="326" height="104" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="766" y="1330" width="6" height="104" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="804" cy="1364" r="17" fill="#475569"/>
+<text x="804" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">3</text>
+<text x="832" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Cache lookup → review</text>
+<text x="788" y="1402" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">org-wide hit = instant</text>
+<text x="788" y="1422" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="1117" y="1334" width="326" height="104" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1114" y="1330" width="326" height="104" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="1114" y="1330" width="6" height="104" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="1152" cy="1364" r="17" fill="#475569"/>
+<text x="1152" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">4</text>
+<text x="1180" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Inline diagnostics</text>
+<text x="1136" y="1402" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">squiggles + quick fixes</text>
+<text x="1136" y="1422" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<rect x="1465" y="1334" width="326" height="104" rx="12" fill="#0F172A" stroke="none" stroke-width="1.5" opacity="0.06"/>
+<rect x="1462" y="1330" width="326" height="104" rx="12" fill="#fff" stroke="#475569" stroke-width="2" opacity="1"/>
+<rect x="1462" y="1330" width="6" height="104" rx="3" fill="#475569" stroke="none" stroke-width="1.5" opacity="1"/>
+<circle cx="1500" cy="1364" r="17" fill="#475569"/>
+<text x="1500" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" fill="#fff" text-anchor="middle" letter-spacing="0">5</text>
+<text x="1528" y="1370" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17.5" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">Advisory commit nudge</text>
+<text x="1484" y="1402" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">PR check remains the real gate</text>
+<text x="1484" y="1422" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0"></text>
+<path d="M396,1382 L418,1382" fill="none" stroke="#475569" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a1)"/>
+<path d="M744,1382 L766,1382" fill="none" stroke="#475569" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a1)"/>
+<path d="M1092,1382 L1114,1382" fill="none" stroke="#475569" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a1)"/>
+<path d="M1440,1382 L1462,1382" fill="none" stroke="#475569" stroke-width="2.3" stroke-linejoin="round" marker-end="url(#a1)"/>
+<line x1="70" y1="1496" x2="1770" y2="1496" stroke="#CBD5E1" stroke-width="1.5"/>
+<text x="70" y="1534" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="23" font-weight="700" fill="#0F172A" text-anchor="start" letter-spacing="0">What changed from the first design</text>
+<rect x="70" y="1562" width="550" height="150" rx="12" fill="#ECFDF5" stroke="#047857" stroke-width="1.8" opacity="1"/>
+<text x="90" y="1596" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#047857" text-anchor="start" letter-spacing="0">Key moved to the backend</text>
+<text x="90" y="1624" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">20 laptops holding an org API key is unrotatable</text>
+<text x="90" y="1646" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">and unattributable. One service now owns the</text>
+<text x="90" y="1668" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">key, the model config, and the ruleset version.</text>
+<rect x="650" y="1562" width="550" height="150" rx="12" fill="#EEF2FF" stroke="#4338CA" stroke-width="1.8" opacity="1"/>
+<text x="670" y="1596" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#4338CA" text-anchor="start" letter-spacing="0">PR-time, not commit-time</text>
+<text x="670" y="1624" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">Non-bypassable, 5–10× fewer calls, and it</text>
+<text x="670" y="1646" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">reviews a finished change rather than</text>
+<text x="670" y="1668" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">half-written WIP commits.</text>
+<rect x="1230" y="1562" width="550" height="150" rx="12" fill="#F1F5F9" stroke="#475569" stroke-width="1.8" opacity="1"/>
+<text x="1250" y="1596" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="17" font-weight="700" fill="#475569" text-anchor="start" letter-spacing="0">Extension demoted to a client</text>
+<text x="1250" y="1624" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">No git hooks, no reconciliation, no speculative</text>
+<text x="1250" y="1646" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">cache to maintain. It is now a fast preview, so</text>
+<text x="1250" y="1668" font-family="'Segoe UI','Inter',system-ui,-apple-system,sans-serif" font-size="13.5" font-weight="400" fill="#5B6B82" text-anchor="start" letter-spacing="0">bypass stops mattering.</text>
+</svg>
