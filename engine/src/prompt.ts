@@ -11,12 +11,29 @@ import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { EngineConfig } from "./types";
 
-/** Locate skill/references/, walking up from the engine package. */
+/**
+ * Locate the guide tree.
+ *
+ * Two layouts have to work. In the monorepo the guides live at
+ * `<root>/skill/references`, reached by walking up from the engine. In a
+ * packaged extension there is no monorepo — the build copies them to
+ * `<extension>/resources/references`, so that is checked at every level too.
+ *
+ * Getting this wrong is silent: the review still runs, just without the ruleset
+ * or any language guide, and the findings quietly get worse.
+ */
+const LAYOUTS = [
+  ["resources", "references"],
+  ["skill", "references"],
+];
+
 export function findReferencesDir(startDir: string = __dirname): string | null {
   let dir = resolve(startDir);
   for (let i = 0; i < 6; i++) {
-    const candidate = join(dir, "skill", "references");
-    if (existsSync(join(candidate, "ruleset.md"))) return candidate;
+    for (const layout of LAYOUTS) {
+      const candidate = join(dir, ...layout);
+      if (existsSync(join(candidate, "ruleset.md"))) return candidate;
+    }
     const parent = resolve(dir, "..");
     if (parent === dir) break;
     dir = parent;

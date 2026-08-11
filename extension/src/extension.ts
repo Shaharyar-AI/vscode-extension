@@ -18,6 +18,7 @@ import { StatusBar } from "./status";
 import { FindingsTree } from "./tree";
 import { IndexWatcher } from "./watcher";
 import { isRepo, readRepoContext } from "@engine/git";
+import { findReferencesDir } from "@engine/prompt";
 import type { Finding } from "@engine/types";
 import { buildReport, type FindingOutcome } from "@engine/report";
 import { deliver, flushQueue } from "@engine/telemetry";
@@ -204,7 +205,21 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
     return;
   }
 
-  const orchestrator = new Orchestrator(repo.root, gate.claudePath, settings);
+  // Resolve the guide tree from the extension's own location. A packaged
+  // extension has no monorepo above it, so this must find the copy the build
+  // placed in resources/. Missing guides are survivable but materially worsen
+  // the review, so say so loudly rather than degrading in silence.
+  const referencesDir = findReferencesDir(context.extensionUri.fsPath);
+  if (referencesDir) {
+    log.info(`Guides: ${referencesDir}`);
+  } else {
+    log.warn(
+      "Guides not found — reviewing with the base prompt only, without the ruleset " +
+        "or any language guide. Findings will be noticeably weaker.",
+    );
+  }
+
+  const orchestrator = new Orchestrator(repo.root, gate.claudePath, settings, referencesDir);
   const diagnostics = new DiagnosticsView(repo.root);
   const fixes = new FixProvider(diagnostics);
   const tree = new FindingsTree(repo.root, fixes);

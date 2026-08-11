@@ -12,7 +12,6 @@
 
 import * as vscode from "vscode";
 import { collectDiff, collectStats, readRepoContext } from "@engine/git";
-import { findReferencesDir } from "@engine/prompt";
 import { cacheKeyFor, runReview } from "@engine/review";
 import { guidesFor } from "@engine/languages";
 import type { Annotation, DiffStats, Finding, RepoContext } from "@engine/types";
@@ -51,6 +50,8 @@ export class Orchestrator implements vscode.Disposable {
     private readonly repoRoot: string,
     private readonly claudePath: string,
     private readonly settings: () => Settings,
+    /** Resolved once at activation; null means "no guides available". */
+    private readonly referencesDir: string | null,
   ) {}
 
   /**
@@ -101,7 +102,7 @@ export class Orchestrator implements vscode.Disposable {
         diff,
         changedPaths: stats.files.map((f) => f.path),
         config: cfg,
-        referencesDir: findReferencesDir(),
+        referencesDir: this.referencesDir,
         onSpawn: (kill) => {
           // Only the newest run owns the cancel handle.
           if (token === this.runToken) this.cancelCurrent = kill;

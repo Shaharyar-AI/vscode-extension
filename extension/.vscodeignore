@@ -1,0 +1,10 @@
+# Only the bundle, the guides, the icon and the manifest ship.
+src/**
+node_modules/**
+esbuild.js
+smoke.js
+tsconfig.json
+.gitignore
+.vscodeignore
+**/*.ts
+**/*.map

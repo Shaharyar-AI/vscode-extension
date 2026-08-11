@@ -1,9 +1,36 @@
 // Bundles the extension (and the engine it imports) into a single CommonJS file.
 // `vscode` is provided by the host at runtime and must stay external.
 const esbuild = require("esbuild");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
+
+/**
+ * Copy the ruleset and language guides into the extension.
+ *
+ * A packaged .vsix has no monorepo around it, so without this the installed
+ * extension reviews with no ruleset and no language guides — and does it
+ * silently, because a missing guide tree is a legitimate state.
+ */
+function copyGuides() {
+  const from = path.join(__dirname, "..", "skill", "references");
+  const to = path.join(__dirname, "resources", "references");
+
+  if (!fs.existsSync(path.join(from, "ruleset.md"))) {
+    console.error(`✘ guides not found at ${from} — the packaged extension would ship without them`);
+    process.exit(1);
+  }
+
+  fs.rmSync(to, { recursive: true, force: true });
+  fs.cpSync(from, to, { recursive: true });
+
+  const count = fs
+    .readdirSync(to, { recursive: true })
+    .filter((f) => String(f).endsWith(".md")).length;
+  console.log(`[build] copied ${count} guide file(s)`);
+}
 
 /** Prints build results in a form VS Code's problem matcher can read. */
 const reporter = {
@@ -21,6 +48,8 @@ const reporter = {
 };
 
 async function main() {
+  copyGuides();
+
   const ctx = await esbuild.context({
     entryPoints: ["src/extension.ts"],
     bundle: true,
