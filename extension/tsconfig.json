@@ -1,0 +1,22 @@
+{
+  // Typecheck only — esbuild produces dist/extension.js. There is deliberately
+  // no rootDir/outDir here: the extension imports engine sources from a sibling
+  // package, which tsc would otherwise reject as outside the project root.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2022"],
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "@engine/*": ["../engine/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

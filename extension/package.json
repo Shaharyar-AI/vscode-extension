@@ -1,0 +1,125 @@
+{
+  "name": "cr-track",
+  "displayName": "CR-Track",
+  "description": "Reviews your staged changes with Claude before you commit, and reports the outcome.",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "publisher": "ikonic",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Linters", "SCM Providers"],
+  "main": "./dist/extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      {
+        "command": "crTrack.reviewStaged",
+        "title": "Review Staged Changes",
+        "category": "CR-Track",
+        "icon": "$(search-fuzzy)"
+      },
+      {
+        "command": "crTrack.reviewAndCommit",
+        "title": "Review & Commit",
+        "category": "CR-Track",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "crTrack.clearFindings",
+        "title": "Clear Findings",
+        "category": "CR-Track"
+      },
+      {
+        "command": "crTrack.showOutput",
+        "title": "Show Log",
+        "category": "CR-Track"
+      },
+      {
+        "command": "crTrack.cancelReview",
+        "title": "Cancel Running Review",
+        "category": "CR-Track"
+      }
+    ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "crTrack.reviewStaged",
+          "when": "scmProvider == git",
+          "group": "navigation@9"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CR-Track",
+      "properties": {
+        "crTrack.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Review staged changes automatically as you stage them."
+        },
+        "crTrack.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the Claude CLI. Leave empty to discover it automatically (PATH, then common install locations)."
+        },
+        "crTrack.model": {
+          "type": "string",
+          "default": "claude-opus-5",
+          "description": "Model to review with."
+        },
+        "crTrack.effort": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "xhigh", "max"],
+          "default": "medium",
+          "description": "Reasoning effort. Higher is more thorough and slower."
+        },
+        "crTrack.profile": {
+          "type": "string",
+          "enum": ["chill", "balanced", "assertive"],
+          "default": "balanced",
+          "enumDescriptions": [
+            "Only blocking and clear important findings.",
+            "All severities, but only high-confidence nits.",
+            "Everything, including speculative nits."
+          ],
+          "description": "How strict the reviewer is."
+        },
+        "crTrack.minSeverity": {
+          "type": "string",
+          "enum": ["blocking", "important", "nit", "suggestion"],
+          "default": "nit",
+          "description": "Drop findings below this severity."
+        },
+        "crTrack.debounceMs": {
+          "type": "number",
+          "default": 2000,
+          "description": "How long to wait for the git index to settle before reviewing."
+        },
+        "crTrack.timeoutSeconds": {
+          "type": "number",
+          "default": 300,
+          "description": "Abandon a review that runs longer than this."
+        },
+        "crTrack.blockCommitOnBlocking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask for confirmation before committing when there are blocking findings. Never blocks outright — there is always an override."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "package": "npm run typecheck && node esbuild.js --production && npx --yes @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "22",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "0.24",
+    "typescript": "5"
+  }
+}
