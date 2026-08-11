@@ -52,6 +52,31 @@ export class DiagnosticsView implements vscode.Disposable {
     return this.byUri.get(uri.toString()) ?? [];
   }
 
+  /** Drop one finding — it was applied or dismissed, so the squiggle goes. */
+  remove(id: string): void {
+    for (const [key, group] of this.byUri) {
+      const kept = group.filter((f) => f.id !== id);
+      if (kept.length === group.length) continue;
+
+      const uri = vscode.Uri.parse(key);
+      if (kept.length === 0) {
+        this.byUri.delete(key);
+        this.collection.delete(uri);
+      } else {
+        this.byUri.set(key, kept);
+        this.collection.set(uri, kept.map((f) => this.toDiagnostic(f)));
+      }
+      return;
+    }
+  }
+
+  /** Findings still on screen, in id order. */
+  remaining(): Finding[] {
+    return [...this.byUri.values()]
+      .flat()
+      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+  }
+
   clear(): void {
     this.collection.clear();
     this.byUri.clear();

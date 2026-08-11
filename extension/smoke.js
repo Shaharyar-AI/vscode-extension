@@ -40,10 +40,18 @@ class Uri {
 
 const state = { statusText: "", statusTooltip: "", diagnostics: new Map(), commands: new Map(), warnings: [] };
 
+class Range { constructor(a, b, c, d) { Object.assign(this, { a, b, c, d }); this.start = { line: a }; this.end = { line: c }; } }
+
 const vscode = {
   Uri,
   EventEmitter,
-  Range: class { constructor(a, b, c, d) { Object.assign(this, { a, b, c, d }); } },
+  Range,
+  Selection: class extends Range {},
+  Position: class { constructor(line, character) { Object.assign(this, { line, character }); } },
+  WorkspaceEdit: class { constructor() { this.edits = []; } replace(uri, range, text) { this.edits.push({ uri, range, text }); } },
+  CodeAction: class { constructor(title, kind) { Object.assign(this, { title, kind }); } },
+  CodeActionKind: { QuickFix: { value: "quickfix" }, Refactor: { value: "refactor" } },
+  TextEditorRevealType: { InCenter: 2 },
   Diagnostic: class { constructor(range, message, severity) { Object.assign(this, { range, message, severity }); } },
   DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
   StatusBarAlignment: { Left: 1, Right: 2 },
@@ -66,6 +74,8 @@ const vscode = {
     showWarningMessage: async (m) => { state.warnings.push(m); say(`  [warn] ${m}`); return undefined; },
     showInformationMessage: async () => undefined,
     showErrorMessage: async () => undefined,
+    showInputBox: async () => undefined,
+    showTextDocument: async () => ({ revealRange() {}, set selection(_v) {} }),
     withProgress: async (_o, task) => task({ report() {} }, { isCancellationRequested: false }),
   },
   workspace: {
@@ -74,12 +84,15 @@ const vscode = {
     createFileSystemWatcher: () => ({ onDidChange: noopEvent, onDidCreate: noopEvent, onDidDelete: noopEvent, dispose() {} }),
     onDidChangeConfiguration: noopEvent,
     onDidChangeWorkspaceFolders: noopEvent,
+    openTextDocument: async () => ({ lineCount: 1, getText: () => "", lineAt: () => ({ text: "" }) }),
+    applyEdit: async () => true,
   },
   commands: {
     registerCommand: (id, fn) => { state.commands.set(id, fn); return disposable(); },
     executeCommand: async () => undefined,
   },
   languages: {
+    registerCodeActionsProvider: () => ({ dispose() {} }),
     createDiagnosticCollection: () => ({
       clear: () => state.diagnostics.clear(),
       set: (uri, diags) => state.diagnostics.set(uri.toString(), diags),

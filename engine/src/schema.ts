@@ -69,6 +69,25 @@ export const FINDINGS_SCHEMA = {
             description:
               "0.0-1.0. How sure you are this is a real problem rather than a false positive.",
           },
+          fix: {
+            type: "object",
+            additionalProperties: false,
+            required: ["oldText", "newText"],
+            description:
+              "An applicable patch, ONLY when the whole fix fits inside lineStart..lineEnd and you are confident it is correct. Omit it for anything needing new files, new imports elsewhere, or judgement (e.g. 'add tests'). A missing fix is fine — the finding still stands on its own.",
+            properties: {
+              oldText: {
+                type: "string",
+                description:
+                  "The exact current text of lines lineStart..lineEnd, verbatim, including original indentation and no trailing newline. Used to verify the file has not changed since review; a mismatch cancels the fix.",
+              },
+              newText: {
+                type: "string",
+                description:
+                  "Replacement for those lines. Complete lines, matching surrounding indentation and style, no trailing newline.",
+              },
+            },
+          },
         },
       },
     },

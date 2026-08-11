@@ -7,6 +7,7 @@
 
 import { cacheKeyFor, extractResult, filterFindings, numberFindings } from "./review";
 import { compareVersions } from "./claude-cli";
+import { redactDeep, redactString } from "./redact";
 import { guidesFor, languageFor, primaryLanguage } from "./languages";
 import { DEFAULT_CONFIG, type RawFinding } from "./types";
 
@@ -163,6 +164,59 @@ check("no guide for unmapped languages", () => {
 check("primary language is the most common", () => {
   eq(primaryLanguage(["a.py", "b.py", "c.ts"]), "Python");
   eq(primaryLanguage(["LICENSE"]), null);
+});
+
+console.log("\nredaction");
+check("private keys", () => {
+  const t = redactString("key:\n-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n-----END RSA PRIVATE KEY-----").text;
+  if (/MIIabc/.test(t)) throw new Error("key body survived");
+});
+check("provider tokens", () => {
+  for (const secret of [
+    "AKIAIOSFODNN7EXAMPLE",
+    "ghp_" + "a".repeat(36),
+    "xoxb-1234567890-abcdefghij",
+    "AIza" + "b".repeat(35),
+    "sk_live_" + "c".repeat(24),
+  ]) {
+    const t = redactString(`value ${secret} here`).text;
+    if (t.includes(secret)) throw new Error(`leaked: ${secret.slice(0, 8)}…`);
+  }
+});
+check("jwt", () => {
+  const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+  if (redactString(jwt).text.includes("dozjgNryP4J3")) throw new Error("jwt survived");
+});
+check("assignment keeps the key, drops the value", () => {
+  const t = redactString('const password = "hunter2hunter2"').text;
+  if (t.includes("hunter2hunter2")) throw new Error("value survived");
+  if (!t.includes("password")) throw new Error("key name should be kept for readability");
+});
+check("credentials in a URL", () => {
+  const t = redactString("postgres://admin:s3cretpass@db.internal:5432/app").text;
+  if (t.includes("s3cretpass")) throw new Error("password survived");
+  if (!t.includes("db.internal")) throw new Error("host should survive");
+});
+check("long hex and base64 blobs", () => {
+  if (redactString("h " + "a1b2c3d4".repeat(5)).text.includes("a1b2c3d4a1b2")) throw new Error("hex survived");
+  if (redactString("b " + "QUJDRA".repeat(9)).text.includes("QUJDRAQUJDRA")) throw new Error("base64 survived");
+});
+check("ordinary prose is untouched", () => {
+  const prose = "Consider a parameterized query on line 42 of src/db.ts.";
+  eq(redactString(prose).text, prose);
+});
+check("redactDeep walks nested structures and reports hits", () => {
+  const r = redactDeep({
+    findings: [{ title: "leak", description: "token = abcdefghijklmnop", nested: { n: 1 } }],
+  });
+  const desc = (r.value as any).findings[0].description as string;
+  if (desc.includes("abcdefghijklmnop")) throw new Error("nested value survived");
+  if ((r.value as any).findings[0].nested.n !== 1) throw new Error("non-strings must survive");
+  if (!r.hits.includes("assignment")) throw new Error("hit not reported");
+});
+check("redactDeep leaves keys alone", () => {
+  const r = redactDeep({ password: "short" });
+  if (!Object.keys(r.value as object).includes("password")) throw new Error("key was mangled");
 });
 
 console.log("\nversion comparison");

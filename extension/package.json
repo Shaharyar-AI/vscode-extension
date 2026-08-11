@@ -40,15 +40,28 @@
         "command": "crTrack.cancelReview",
         "title": "Cancel Running Review",
         "category": "CR-Track"
-      }
+      },
+      { "command": "crTrack.applyFix", "title": "Apply Fix", "category": "CR-Track" },
+      { "command": "crTrack.dismissFinding", "title": "Dismiss Finding", "category": "CR-Track" },
+      { "command": "crTrack.copySuggestion", "title": "Copy Suggestion", "category": "CR-Track" }
     ],
     "menus": {
       "scm/title": [
         {
+          "command": "crTrack.reviewAndCommit",
+          "when": "scmProvider == git",
+          "group": "navigation@1"
+        },
+        {
           "command": "crTrack.reviewStaged",
           "when": "scmProvider == git",
-          "group": "navigation@9"
+          "group": "inline@9"
         }
+      ],
+      "commandPalette": [
+        { "command": "crTrack.applyFix", "when": "false" },
+        { "command": "crTrack.dismissFinding", "when": "false" },
+        { "command": "crTrack.copySuggestion", "when": "false" }
       ]
     },
     "configuration": {

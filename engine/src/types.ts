@@ -22,6 +22,19 @@ export const CATEGORIES: Category[] = [
   "docs",
 ];
 
+/**
+ * A machine-applicable patch for a finding.
+ *
+ * `oldText` is a staleness guard, not decoration: the file may have been edited
+ * between the review and the developer clicking the lightbulb, and applying a
+ * patch to shifted lines corrupts the file. If it no longer matches, the fix is
+ * refused rather than applied.
+ */
+export interface FindingFix {
+  oldText: string;
+  newText: string;
+}
+
 /** A finding exactly as the model returns it — no id, no status, no envelope. */
 export interface RawFinding {
   file: string;
@@ -33,6 +46,8 @@ export interface RawFinding {
   description: string;
   suggestion: string;
   confidence: number;
+  /** Present only when the fix is local and the model is confident in it. */
+  fix?: FindingFix;
 }
 
 export interface RawAnnotation {
