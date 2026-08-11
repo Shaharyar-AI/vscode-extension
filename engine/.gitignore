@@ -1,3 +1,6 @@
-﻿node_modules/
+node_modules/
 dist/
 
+# Eval output describes real findings — including security issues — in whatever
+# repositories were reviewed, with file paths and line numbers. Keep it local.
+evalrun*/

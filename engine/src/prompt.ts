@@ -74,7 +74,6 @@ state access may create a problem in a sibling file. Record such a finding
 against the file where the fix belongs.`;
 
 export function buildPrompt(
-  changedPaths: string[],
   guides: string[],
   config: EngineConfig,
   referencesDir: string | null,
@@ -111,6 +110,11 @@ export function buildPrompt(
     parts.push("# Project conventions (treat as project rules)\n\n" + conv);
   }
 
+  // NOTE: everything below must be stable across reviews of the same repo.
+  // Anything that varies per change set (file counts, paths, timestamps, run
+  // ids) invalidates the cached prefix and re-bills the whole prompt. An
+  // earlier version interpolated the changed-file count here and cost ~40k
+  // cache-creation tokens on every single review.
   parts.push(
     `## Active configuration
 
@@ -121,8 +125,7 @@ export function buildPrompt(
           ? " — report everything, including speculative nits."
           : " — report all severities, but only high-confidence nits and suggestions."
     }
-- Enabled categories: ${config.categoriesEnabled.join(", ")}
-- Files in this change set: ${changedPaths.length}`,
+- Enabled categories: ${config.categoriesEnabled.join(", ")}`,
   );
 
   return { systemPrompt: parts.join("\n\n---\n\n"), guidesLoaded: loaded };

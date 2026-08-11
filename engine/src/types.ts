@@ -109,7 +109,9 @@ export const DEFAULT_CONFIG: EngineConfig = {
   minSeverity: "nit",
   model: "claude-opus-5",
   effort: "medium",
-  maxBudgetUsd: 0.5,
+  // 0 = no cap. Review quality is the objective here, not spend; a cap only
+  // ever truncates a review mid-flight and throws the work away.
+  maxBudgetUsd: 0,
   timeoutMs: 180_000,
   guidesEnabled: true,
 };

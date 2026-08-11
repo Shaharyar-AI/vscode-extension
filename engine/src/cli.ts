@@ -75,7 +75,7 @@ Usage: cr-track [options]
   --effort <e>        low | medium | high | xhigh | max   (default ${DEFAULT_CONFIG.effort})
   --profile <p>       chill | balanced | assertive        (default ${DEFAULT_CONFIG.profile})
   --min-severity <s>  blocking | important | nit | suggestion
-  --budget <usd>      per-review ceiling (default ${DEFAULT_CONFIG.maxBudgetUsd})
+  --budget <usd>      optional spend cap; 0 (default) means no cap
   --timeout <sec>     default ${DEFAULT_CONFIG.timeoutMs / 1000}
   -v, --verbose       show the invocation and raw stdout
 

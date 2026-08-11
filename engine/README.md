@@ -67,6 +67,16 @@ destroy that.
 minSeverity + guides)`, truncated to 32 chars. Anything that changes the answer
 is in it; anything that varies per run is not.
 
+**No spend cap by default.** Review quality is the objective; a cap only ever
+abandons a review partway through and throws the work away. `--budget` exists if
+you ever want one, and `0` (the default) means no cap.
+
+**Keep the prompt prefix byte-stable.** An earlier version interpolated the
+changed-file count into the system prompt. Because that varies per review it
+invalidated the cached prefix every single time, which showed up in an eval run
+as ~40k cache-creation tokens per review and a third of the run dying partway
+through. Do not add per-run values to `prompt.ts`.
+
 ## Not done yet
 
 Verified against a live CLI. `claude` was not installed on the machine this was
