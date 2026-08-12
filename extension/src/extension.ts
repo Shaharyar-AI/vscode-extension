@@ -176,6 +176,61 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 }
 
+/**
+ * Watchers that only exist while the extension is dormant, so it can notice
+ * the world changing under it and come back on its own.
+ *
+ * Everything that stops the extension starting is temporary and fixable
+ * without a reload: `git init` runs, the CLI gets installed, someone signs in.
+ * Checking once at activation and never again means the fix appears to do
+ * nothing and the extension looks broken.
+ */
+let recovery: vscode.Disposable | undefined;
+let lastRecheck = 0;
+
+function disarmRecovery(): void {
+  recovery?.dispose();
+  recovery = undefined;
+}
+
+function armRecovery(
+  context: vscode.ExtensionContext,
+  status: StatusBar,
+  folderPath: string | undefined,
+): void {
+  disarmRecovery();
+  const parts: vscode.Disposable[] = [];
+  const restart = (why: string) => {
+    log.info(`${why} — rechecking`);
+    void start(context, status).catch((err) => log.error("Restart failed", err));
+  };
+
+  if (folderPath) {
+    // `.git/HEAD` is created by `git init` and by `git clone`, and unlike the
+    // directory itself it is a file the watcher reliably reports.
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(folderPath), ".git/HEAD"),
+    );
+    watcher.onDidCreate(() => restart("A git repository appeared"));
+    watcher.onDidChange(() => restart("The git repository changed"));
+    parts.push(watcher);
+  }
+
+  // Catches everything a file watcher cannot see — a CLI installed in another
+  // terminal, a `claude` login. Throttled, and only ever while dormant.
+  parts.push(
+    vscode.window.onDidChangeWindowState((e) => {
+      if (!e.focused || session) return;
+      const now = Date.now();
+      if (now - lastRecheck < 15_000) return;
+      lastRecheck = now;
+      restart("Window focused while inactive");
+    }),
+  );
+
+  recovery = vscode.Disposable.from(...parts);
+}
+
 async function start(context: vscode.ExtensionContext, status: StatusBar): Promise<void> {
   session?.dispose();
   session = undefined;
@@ -183,13 +238,18 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) {
     status.dormant("no folder is open");
+    armRecovery(context, status, undefined);
     return;
   }
 
   const cwd = folder.uri.fsPath;
   if (!(await isRepo(cwd))) {
-    log.info(`${cwd} is not a git repository — staying dormant`);
+    log.info(
+      `${cwd} is not a git repository — staying dormant. ` +
+        `Watching for one to appear; run "CR-Track: Restart" after \`git init\` if it does not.`,
+    );
     status.dormant("this folder is not a git repository");
+    armRecovery(context, status, cwd);
     return;
   }
 
@@ -199,12 +259,14 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
   if (!settings().enabled) {
     log.info("Disabled via crTrack.enabled");
     status.dormant("disabled in settings");
+    disarmRecovery(); // an explicit opt-out should stay opted out
     return;
   }
 
   const gate = await checkStartup(context, settings().claudePath);
   if (!gate.ready || !gate.claudePath) {
     status.dormant(gate.reason ?? "the Claude CLI is unavailable");
+    armRecovery(context, status, cwd);
     return;
   }
 
@@ -248,6 +310,7 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
     context.extension?.packageJSON?.version ?? "0.0.0",
     watcher,
   );
+  disarmRecovery(); // running now; nothing left to wait for
   status.update(orchestrator.state);
   log.info(`Active on ${repo.name} (${repo.branch})`);
 
@@ -279,8 +342,16 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
 
   register("crTrack.reviewStaged", async () => {
     if (!session) {
-      void vscode.window.showWarningMessage("CR-Track is inactive. See the log for why.");
-      log.show();
+      // Offer the fix rather than only the diagnosis — most causes clear on a
+      // recheck, and the user asking for a review is the moment to try.
+      await start(context, status);
+    }
+    if (!session) {
+      const choice = await vscode.window.showWarningMessage(
+        "CR-Track is inactive — it could not start on this folder.",
+        "Show log",
+      );
+      if (choice === "Show log") log.show();
       return;
     }
     await vscode.window.withProgress(
@@ -398,10 +469,21 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     for (const finding of open) await session.fixes.dismiss(finding, false);
   });
 
+  register("crTrack.restart", async () => {
+    log.info("Restart requested");
+    await start(context, status);
+    if (!session) {
+      void vscode.window
+        .showWarningMessage("CR-Track is still inactive. The log says why.", "Show log")
+        .then((c) => c === "Show log" && log.show());
+    }
+  });
+
   register("crTrack.showOutput", () => log.show());
 }
 
 export function deactivate(): void {
+  disarmRecovery();
   session?.dispose();
   session = undefined;
 }

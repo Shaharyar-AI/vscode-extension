@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.2
+
+- **The extension no longer stays stuck once it goes dormant.** It checked for a
+  git repository and the Claude CLI exactly once at startup, so running
+  `git init` — or installing the CLI — afterwards did nothing until the window
+  was reloaded, which looked identical to the extension being broken. It now
+  watches for a repository appearing and rechecks when the window regains focus.
+- Added **CR-Track: Restart** for a manual recheck.
+- Asking for a review while inactive now retries the startup checks first,
+  instead of only reporting that it is inactive.
+
 ## 0.1.1
 
 - **"Nothing staged" is now visible rather than silent.** With changes in the

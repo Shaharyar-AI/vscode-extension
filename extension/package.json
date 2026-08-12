@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews your staged changes with Claude before you commit, and reports the outcome.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -116,6 +116,12 @@
         "title": "Review Working Tree (staged + unstaged)",
         "category": "CR-Track",
         "icon": "$(git-compare)"
+      },
+      {
+        "command": "crTrack.restart",
+        "title": "Restart",
+        "category": "CR-Track",
+        "icon": "$(refresh)"
       }
     ],
     "viewsContainers": {

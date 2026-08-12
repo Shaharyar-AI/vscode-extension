@@ -28,6 +28,7 @@ function makeStub({ repo, answers = {}, onLog }) {
     treeView: undefined,
     contexts: new Map(),
     fileWatchers: [],
+    windowStateHandlers: [],
     logLines: [],
   };
 
@@ -91,7 +92,10 @@ function makeStub({ repo, answers = {}, onLog }) {
 
   const vscode = {
     Uri, EventEmitter, Range, Position, Selection, WorkspaceEdit,
-    Disposable: class { constructor(fn) { this.dispose = fn ?? (() => {}); } },
+    Disposable: Object.assign(
+      class { constructor(fn) { this.dispose = fn ?? (() => {}); } },
+      { from: (...ds) => ({ dispose: () => ds.forEach((d) => d?.dispose?.()) }) },
+    ),
     CodeAction: class { constructor(title, kind) { this.title = title; this.kind = kind; } },
     CodeActionKind: { QuickFix: { value: "quickfix" } },
     TreeItem: class { constructor(label, collapsibleState) { this.label = label; this.collapsibleState = collapsibleState; } },
@@ -145,6 +149,7 @@ function makeStub({ repo, answers = {}, onLog }) {
       },
       showTextDocument: async () => ({ revealRange() {}, set selection(_v) {} }),
       withProgress: async (_o, task) => task({ report() {} }, { isCancellationRequested: false }),
+      onDidChangeWindowState: (h) => { state.windowStateHandlers.push(h); return disposable(); },
       createTreeView: (id, opts) => {
         const view = { id, provider: opts.treeDataProvider, badge: undefined, title: undefined, dispose() {} };
         state.treeView = view;
