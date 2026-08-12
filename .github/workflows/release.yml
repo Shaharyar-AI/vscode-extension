@@ -1,0 +1,83 @@
+# Build the extension on every tag and attach the .vsix to a GitHub Release.
+#
+# Publishing to the marketplaces is opt-in: each step runs only when its token
+# secret exists, so the workflow is useful immediately and stays useful if you
+# later decide to publish. Tag with `v0.1.1` to trigger it.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install engine deps
+        working-directory: engine
+        run: npm ci || npm install
+
+      - name: Engine tests
+        working-directory: engine
+        run: npm test
+
+      - name: Install extension deps
+        working-directory: extension
+        run: npm ci || npm install
+
+      - name: Typecheck
+        working-directory: extension
+        run: npm run typecheck
+
+      # The model-backed scenarios need an authenticated Claude CLI, which CI
+      # does not have. The offline half still guards activation, guide
+      # resolution and config parsing.
+      - name: QA (offline scenarios)
+        working-directory: extension
+        run: npm run qa:fast
+
+      - name: Package
+        working-directory: extension
+        run: |
+          npx --yes @vscode/vsce package --no-dependencies
+          ls -la *.vsix
+
+      - name: Attach the .vsix to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: extension/*.vsix
+          generate_release_notes: true
+          body: |
+            Install without the marketplace:
+
+            ```bash
+            code --install-extension cr-track-${{ github.ref_name }}.vsix
+            ```
+
+            Requires the Claude CLI, installed and signed in:
+            `npm i -g @anthropic-ai/claude-code`
+
+      # ── optional: public marketplaces ───────────────────────────────────
+      - name: Publish to the VS Code Marketplace
+        if: ${{ env.VSCE_PAT != '' }}
+        working-directory: extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx --yes @vscode/vsce publish --no-dependencies --pat "$VSCE_PAT"
+
+      - name: Publish to Open VSX
+        if: ${{ env.OVSX_PAT != '' }}
+        working-directory: extension
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx --yes ovsx publish *.vsix --pat "$OVSX_PAT"

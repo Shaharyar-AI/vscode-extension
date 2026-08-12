@@ -3,9 +3,30 @@
   "displayName": "CR-Track",
   "description": "Reviews your staged changes with Claude before you commit, and reports the outcome.",
   "version": "0.1.0",
-  "private": true,
-  "license": "MIT",
   "publisher": "ikonic",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shaharyar-AI/vscode-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Shaharyar-AI/vscode-extension/issues"
+  },
+  "homepage": "https://github.com/Shaharyar-AI/vscode-extension#readme",
+  "keywords": [
+    "code review",
+    "claude",
+    "ai",
+    "git",
+    "pre-commit",
+    "static analysis"
+  ],
+  "galleryBanner": {
+    "color": "#0B4F52",
+    "theme": "dark"
+  },
+  "qna": false,
   "engines": {
     "vscode": "^1.85.0"
   },
