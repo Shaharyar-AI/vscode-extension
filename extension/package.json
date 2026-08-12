@@ -291,6 +291,11 @@
           "type": "boolean",
           "default": true,
           "description": "Ask for confirmation before committing when there are blocking findings. Never blocks outright — there is always an override."
+        },
+        "crTrack.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Dashboard ingest URL for review reports. A repository's .cr-track.yaml `endpoint` overrides this. Leave empty to keep reports on disk only."
         }
       }
     }

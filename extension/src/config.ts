@@ -116,16 +116,25 @@ export function readSettings(repoRoot: string | undefined): Settings {
   return settings;
 }
 
-/** Where reports get POSTed, if the repo asks for it. */
+/**
+ * Where reports get POSTed.
+ *
+ * A repository's `.cr-track.yaml` wins, so a team can point one repo at its own
+ * dashboard. The VS Code setting is the personal fallback, which is what makes
+ * this usable straight from a marketplace install with no per-repo file.
+ */
 export function readEndpoint(repoRoot: string | undefined): string | undefined {
-  if (!repoRoot) return undefined;
-  const path = join(repoRoot, ".cr-track.yaml");
-  if (!existsSync(path)) return undefined;
-  try {
-    const yaml = parseSimpleYaml(readFileSync(path, "utf8"));
-    const endpoint = yaml["endpoint"];
-    return typeof endpoint === "string" && endpoint.startsWith("http") ? endpoint : undefined;
-  } catch {
-    return undefined;
+  if (repoRoot) {
+    const path = join(repoRoot, ".cr-track.yaml");
+    if (existsSync(path)) {
+      try {
+        const endpoint = parseSimpleYaml(readFileSync(path, "utf8"))["endpoint"];
+        if (typeof endpoint === "string" && endpoint.startsWith("http")) return endpoint;
+      } catch {
+        /* unreadable config falls through to the setting */
+      }
+    }
   }
+  const fromSettings = vscode.workspace.getConfiguration("crTrack").get<string>("endpoint")?.trim();
+  return fromSettings && fromSettings.startsWith("http") ? fromSettings : undefined;
 }

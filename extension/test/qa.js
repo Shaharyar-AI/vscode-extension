@@ -425,9 +425,14 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
 
     if (fs.existsSync(local)) {
       const report = JSON.parse(fs.readFileSync(local, "utf8"));
-      check("report has the required envelope",
-        report.schemaVersion === "2.0" && report.source === "cr-track-extension" && Array.isArray(report.findings),
-        `schemaVersion=${report.schemaVersion} source=${report.source}`);
+      // `source` is what the dashboard validates against; client.surface is
+      // what actually produced the report.
+      check("report has the envelope the dashboard requires",
+        report.schemaVersion === "2.0" && report.source === "claude-code-skill" &&
+        Array.isArray(report.findings) && Array.isArray(report.changes) &&
+        typeof report.review?.id === "string" && report.review?.mode === "staged" &&
+        typeof report.repository?.remote === "string" && typeof report.ruleset === "string",
+        `source=${report.source} changes=${Array.isArray(report.changes)} surface=${report.client?.surface}`);
       check("developer identity captured",
         report.developer?.email === "qa@example.com", JSON.stringify(report.developer));
       check("diff stats captured",

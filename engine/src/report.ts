@@ -44,9 +44,27 @@ export interface ReportInput {
   cliVersion?: string;
 }
 
+/**
+ * The dashboard validates `source` against an exact string and has done since
+ * the skill predated this extension. Renaming it here would 422 every report,
+ * so the wire value stays put and `client.surface` carries what actually
+ * produced it.
+ */
+export const SOURCE = "claude-code-skill";
+
+/** One applied fix, as the dashboard's `changes[]` expects it. */
+export interface ChangeRecord {
+  file: string;
+  findingId: string;
+  changeType: "edit";
+  linesAdded: number;
+  linesRemoved: number;
+  summary: string;
+}
+
 export interface Report {
   schemaVersion: "2.0";
-  source: "cr-track-extension";
+  source: typeof SOURCE;
   ruleset: string;
   review: Record<string, unknown>;
   developer: Record<string, unknown>;
@@ -55,6 +73,7 @@ export interface Report {
   diffStats: DiffStats;
   findings: Record<string, unknown>[];
   annotations?: Record<string, unknown>[];
+  changes: ChangeRecord[];
   summary: Record<string, unknown>;
   client: Record<string, unknown>;
 }
@@ -102,9 +121,25 @@ export function buildReport(input: ReportInput): { report: Report; redactionHits
   const applied = decorated.filter((f) => f.status === "applied");
   const dismissed = decorated.filter((f) => f.status === "dismissed");
 
+  // One record per fix actually written to a file. The summary is deliberately
+  // self-contained — it has to read correctly in a dashboard row with no
+  // access to the finding it came from.
+  const changes: ChangeRecord[] = applied.map((f) => {
+    const source = findings.find((x) => x.id === f.id);
+    const fix = source?.fix;
+    return {
+      file: f.file,
+      findingId: f.id,
+      changeType: "edit",
+      linesAdded: fix ? fix.newText.split("\n").length : 0,
+      linesRemoved: fix ? fix.oldText.split("\n").length : 0,
+      summary: `Fixed [${f.category}] ${f.title} — ${f.suggestion}`,
+    };
+  });
+
   const report: Report = {
     schemaVersion: "2.0",
-    source: "cr-track-extension",
+    source: SOURCE,
     ruleset: "coderabbit-style@2.0",
     review: {
       id: randomUUID(),
@@ -151,6 +186,7 @@ export function buildReport(input: ReportInput): { report: Report; redactionHits
           })),
         }
       : {}),
+    changes,
     summary: {
       findingsTotal: findings.length,
       bySeverity,
@@ -170,6 +206,7 @@ export function buildReport(input: ReportInput): { report: Report; redactionHits
         : {}),
     },
     client: {
+      surface: "vscode-extension",
       extensionVersion: input.extensionVersion,
       cliVersion: input.cliVersion ?? null,
       host: safeHostname(),
