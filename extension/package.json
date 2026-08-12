@@ -9,9 +9,14 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Linters", "SCM Providers"],
+  "categories": [
+    "Linters",
+    "SCM Providers"
+  ],
   "main": "./dist/extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
       {
@@ -41,9 +46,21 @@
         "title": "Cancel Running Review",
         "category": "CR-Track"
       },
-      { "command": "crTrack.applyFix", "title": "Apply Fix", "category": "CR-Track" },
-      { "command": "crTrack.dismissFinding", "title": "Dismiss Finding", "category": "CR-Track" },
-      { "command": "crTrack.copySuggestion", "title": "Copy Suggestion", "category": "CR-Track" },
+      {
+        "command": "crTrack.applyFix",
+        "title": "Apply Fix",
+        "category": "CR-Track"
+      },
+      {
+        "command": "crTrack.dismissFinding",
+        "title": "Dismiss Finding",
+        "category": "CR-Track"
+      },
+      {
+        "command": "crTrack.copySuggestion",
+        "title": "Copy Suggestion",
+        "category": "CR-Track"
+      },
       {
         "command": "crTrack.acceptFinding",
         "title": "Accept — apply this fix",
@@ -68,7 +85,11 @@
         "category": "CR-Track",
         "icon": "$(clear-all)"
       },
-      { "command": "crTrack.revealFinding", "title": "Go to Finding", "category": "CR-Track" }
+      {
+        "command": "crTrack.revealFinding",
+        "title": "Go to Finding",
+        "category": "CR-Track"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -153,12 +174,30 @@
         }
       ],
       "commandPalette": [
-        { "command": "crTrack.applyFix", "when": "false" },
-        { "command": "crTrack.dismissFinding", "when": "false" },
-        { "command": "crTrack.copySuggestion", "when": "false" },
-        { "command": "crTrack.acceptFinding", "when": "false" },
-        { "command": "crTrack.rejectFinding", "when": "false" },
-        { "command": "crTrack.revealFinding", "when": "false" }
+        {
+          "command": "crTrack.applyFix",
+          "when": "false"
+        },
+        {
+          "command": "crTrack.dismissFinding",
+          "when": "false"
+        },
+        {
+          "command": "crTrack.copySuggestion",
+          "when": "false"
+        },
+        {
+          "command": "crTrack.acceptFinding",
+          "when": "false"
+        },
+        {
+          "command": "crTrack.rejectFinding",
+          "when": "false"
+        },
+        {
+          "command": "crTrack.revealFinding",
+          "when": "false"
+        }
       ]
     },
     "configuration": {
@@ -181,13 +220,23 @@
         },
         "crTrack.effort": {
           "type": "string",
-          "enum": ["low", "medium", "high", "xhigh", "max"],
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
           "default": "medium",
           "description": "Reasoning effort. Higher is more thorough and slower."
         },
         "crTrack.profile": {
           "type": "string",
-          "enum": ["chill", "balanced", "assertive"],
+          "enum": [
+            "chill",
+            "balanced",
+            "assertive"
+          ],
           "default": "balanced",
           "enumDescriptions": [
             "Only blocking and clear important findings.",
@@ -198,7 +247,12 @@
         },
         "crTrack.minSeverity": {
           "type": "string",
-          "enum": ["blocking", "important", "nit", "suggestion"],
+          "enum": [
+            "blocking",
+            "important",
+            "nit",
+            "suggestion"
+          ],
           "default": "nit",
           "description": "Drop findings below this severity."
         },
@@ -224,7 +278,9 @@
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "package": "npm run typecheck && node esbuild.js --production && npx --yes @vscode/vsce package --no-dependencies"
+    "package": "npm run typecheck && node esbuild.js --production && npx --yes @vscode/vsce package --no-dependencies",
+    "qa": "node esbuild.js && node test/qa.js",
+    "qa:fast": "node esbuild.js && node test/qa.js --fast"
   },
   "devDependencies": {
     "@types/node": "22",
