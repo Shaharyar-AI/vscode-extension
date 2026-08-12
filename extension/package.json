@@ -306,7 +306,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "package": "npm run typecheck && node esbuild.js --production && npx --yes @vscode/vsce package --no-dependencies",
     "qa": "node esbuild.js && node test/qa.js",
-    "qa:fast": "node esbuild.js && node test/qa.js --fast"
+    "qa:fast": "node esbuild.js && node test/qa.js --fast",
+    "preflight": "node esbuild.js --production && node test/preflight.js"
   },
   "devDependencies": {
     "@types/node": "22",
