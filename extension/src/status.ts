@@ -19,9 +19,22 @@ export class StatusBar implements vscode.Disposable {
     switch (state.kind) {
       case "idle":
         this.item.text = "$(shield) CR-Track";
-        this.item.tooltip = "No staged changes. Click to review now.";
+        this.item.tooltip = "Nothing to review — the working tree is clean.";
         this.item.backgroundColor = undefined;
         this.item.command = "crTrack.reviewStaged";
+        break;
+
+      // Spelled out in the status bar text, not just the tooltip. "Nothing is
+      // staged" is the single most likely reason someone thinks the extension
+      // is broken, and a tooltip only helps people who already suspect it.
+      case "nothing-staged":
+        this.item.text = `$(shield) CR-Track · nothing staged`;
+        this.item.tooltip =
+          `${state.unstagedFiles} file(s) changed but not staged.\n` +
+          `CR-Track reviews staged changes — run \`git add\`, or click to review ` +
+          `the working tree anyway.`;
+        this.item.backgroundColor = undefined;
+        this.item.command = "crTrack.reviewWorkingTree";
         break;
 
       case "running":

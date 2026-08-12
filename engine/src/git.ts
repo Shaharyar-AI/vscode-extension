@@ -76,6 +76,27 @@ function repoNameFrom(remote: string, root: string): string {
   return parts[parts.length - 1] || basename(root);
 }
 
+/**
+ * How many files are changed but not staged, including untracked ones.
+ *
+ * Used to tell "there is nothing to review" apart from "there is plenty to
+ * review, you just haven't staged it" — which look identical otherwise and
+ * make the extension appear broken.
+ */
+export async function countUnstaged(repo: RepoContext): Promise<number> {
+  const status = await gitSoft(repo.root, ["status", "--porcelain"]);
+  if (!status) return 0;
+  let n = 0;
+  for (const line of status.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    // Columns are [index][worktree]. A non-space worktree column means the
+    // change is not staged; "??" is untracked.
+    const worktree = line[1];
+    if (line.startsWith("??") || (worktree && worktree !== " ")) n++;
+  }
+  return n;
+}
+
 /** The unified diff for the active scope. Empty string means nothing to review. */
 export async function collectDiff(repo: RepoContext, scope: Scope): Promise<string> {
   return (await run("git", diffArgs(scope, repo.baseBranch), {

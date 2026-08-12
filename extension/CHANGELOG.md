@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1
+
+- **"Nothing staged" is now visible rather than silent.** With changes in the
+  working tree but nothing staged, the extension looked identical to broken: an
+  empty panel and no explanation. The status bar now reads *nothing staged*, the
+  panel says why, and the log records it.
+- Added **CR-Track: Review Working Tree**, which reviews staged and unstaged
+  changes together, for anyone who does not stage incrementally.
+
 ## 0.1.0
 
 First release.

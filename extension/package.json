@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews your staged changes with Claude before you commit, and reports the outcome.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -110,6 +110,12 @@
         "command": "crTrack.revealFinding",
         "title": "Go to Finding",
         "category": "CR-Track"
+      },
+      {
+        "command": "crTrack.reviewWorkingTree",
+        "title": "Review Working Tree (staged + unstaged)",
+        "category": "CR-Track",
+        "icon": "$(git-compare)"
       }
     ],
     "viewsContainers": {
@@ -134,6 +140,12 @@
     "viewsWelcome": [
       {
         "view": "crTrack.findings",
+        "when": "crTrack.nothingStaged",
+        "contents": "Nothing is staged.\n\nCR-Track reviews your **staged** changes, so it is waiting for a `git add`.\n\n[Stage all changes](command:git.stageAll)\n\n[Review working tree instead](command:crTrack.reviewWorkingTree)"
+      },
+      {
+        "view": "crTrack.findings",
+        "when": "!crTrack.nothingStaged",
         "contents": "No review yet.\n\nStage some changes and CR-Track reviews them automatically, or run one now.\n\n[Review staged changes](command:crTrack.reviewStaged)\n\n[Open the log](command:crTrack.showOutput)"
       }
     ],
@@ -155,6 +167,11 @@
           "command": "crTrack.reviewStaged",
           "when": "view == crTrack.findings",
           "group": "navigation@1"
+        },
+        {
+          "command": "crTrack.reviewWorkingTree",
+          "when": "view == crTrack.findings",
+          "group": "navigation@2"
         },
         {
           "command": "crTrack.acceptAll",

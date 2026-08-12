@@ -125,10 +125,13 @@ class Session implements vscode.Disposable {
   }
 
   private render(state: State): void {
+    void vscode.commands.executeCommand("setContext", "crTrack.nothingStaged",
+      state.kind === "nothing-staged");
+
     if (state.kind === "done") {
       this.diagnostics.show(state.outcome.findings);
       this.tree.setFindings(state.outcome.findings);
-    } else if (state.kind === "idle") {
+    } else if (state.kind === "idle" || state.kind === "nothing-staged") {
       this.diagnostics.clear();
       this.tree.clear();
     }
@@ -309,6 +312,21 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
 
     const committed = await runGitCommit();
     if (committed) await session.report(decision.overrideReason);
+  });
+
+  register("crTrack.reviewWorkingTree", async () => {
+    if (!session) {
+      void vscode.window.showWarningMessage("CR-Track is inactive. See the log for why.");
+      log.show();
+      return;
+    }
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.SourceControl, title: "CR-Track: reviewing working tree…" },
+      () => session!.orchestrator.review({ force: true, scope: "all" }),
+    );
+    if (session.orchestrator.state.kind === "idle") {
+      void vscode.window.showInformationMessage("CR-Track: no changes to review.");
+    }
   });
 
   register("crTrack.cancelReview", () => {

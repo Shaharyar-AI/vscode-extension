@@ -11,10 +11,10 @@
  */
 
 import * as vscode from "vscode";
-import { collectDiff, collectStats, readRepoContext } from "@engine/git";
+import { collectDiff, collectStats, countUnstaged, readRepoContext } from "@engine/git";
 import { cacheKeyFor, runReview } from "@engine/review";
 import { guidesFor } from "@engine/languages";
-import type { Annotation, DiffStats, Finding, RepoContext } from "@engine/types";
+import type { Annotation, DiffStats, Finding, RepoContext, Scope } from "@engine/types";
 import type { Settings } from "./config";
 import { log } from "./log";
 
@@ -31,6 +31,8 @@ export interface ReviewOutcome {
 
 export type State =
   | { kind: "idle" }
+  /** Nothing staged, but the working tree has changes waiting. */
+  | { kind: "nothing-staged"; unstagedFiles: number }
   | { kind: "running"; startedAt: number }
   | { kind: "done"; outcome: ReviewOutcome }
   | { kind: "failed"; message: string };
@@ -58,7 +60,8 @@ export class Orchestrator implements vscode.Disposable {
    * Review the current staged set. Safe to call repeatedly; each call
    * supersedes the last.
    */
-  async review(options: { force?: boolean } = {}): Promise<ReviewOutcome | undefined> {
+  async review(options: { force?: boolean; scope?: Scope } = {}): Promise<ReviewOutcome | undefined> {
+    const scope: Scope = options.scope ?? "staged";
     const token = ++this.runToken;
     this.cancelInFlight();
 
@@ -70,13 +73,22 @@ export class Orchestrator implements vscode.Disposable {
       return this.fail(token, `not a git repository: ${(err as Error).message}`);
     }
 
-    const diff = await collectDiff(repo, "staged");
+    const diff = await collectDiff(repo, scope);
     if (!diff.trim()) {
-      this.setState({ kind: "idle" });
+      // Distinguish "clean tree" from "you forgot to stage" — the second is by
+      // far the more common reason someone thinks the extension is dead.
+      const unstagedFiles = scope === "staged" ? await countUnstaged(repo) : 0;
+      log.info(
+        unstagedFiles > 0
+          ? `Nothing staged — ${unstagedFiles} file(s) changed but not staged. ` +
+            `Run \`git add\`, or use "CR-Track: Review Working Tree".`
+          : "Nothing to review — the working tree is clean.",
+      );
+      this.setState(unstagedFiles > 0 ? { kind: "nothing-staged", unstagedFiles } : { kind: "idle" });
       return undefined;
     }
 
-    const key = cacheKeyFor(diff, cfg, guidesFor((await collectStats(repo, "staged")).files.map((f) => f.path)));
+    const key = cacheKeyFor(diff, cfg, guidesFor((await collectStats(repo, scope)).files.map((f) => f.path)));
     if (!options.force) {
       const hit = this.cache.get(key);
       if (hit) {
@@ -87,10 +99,10 @@ export class Orchestrator implements vscode.Disposable {
       }
     }
 
-    const stats = await collectStats(repo, "staged");
+    const stats = await collectStats(repo, scope);
     this.setState({ kind: "running", startedAt: Date.now() });
     log.info(
-      `Reviewing ${stats.filesChanged} file(s), +${stats.linesAdded}/-${stats.linesRemoved} ` +
+      `Reviewing ${scope} — ${stats.filesChanged} file(s), +${stats.linesAdded}/-${stats.linesRemoved} ` +
         `(${cfg.model}, effort ${cfg.effort})`,
     );
 
