@@ -13,7 +13,7 @@ import { DiagnosticsView } from "./diagnostics";
 import { FixProvider } from "./fixes";
 import { initLog, log } from "./log";
 import { Orchestrator, type State } from "./orchestrator";
-import { checkStartup } from "./startup";
+import { checkStartup, clearStartupCache } from "./startup";
 import { StatusBar } from "./status";
 import { FindingsTree } from "./tree";
 import { IndexWatcher } from "./watcher";
@@ -163,6 +163,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         e.affectsConfiguration("crTrack.claudePath")
       ) {
         log.info("Configuration changed — restarting");
+        clearStartupCache();
         await start(context, status);
       }
     }),
@@ -471,6 +472,7 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
 
   register("crTrack.restart", async () => {
     log.info("Restart requested");
+    clearStartupCache();
     await start(context, status);
     if (!session) {
       void vscode.window

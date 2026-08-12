@@ -19,13 +19,46 @@ export interface Gate {
   reason?: string;
 }
 
+/**
+ * Discovery is expensive — `where claude` plus `claude --version`, which spawns
+ * Node and has been measured at 20+ seconds on a cold Windows machine. That is
+ * tolerable once at startup and not tolerable on every recovery recheck, so the
+ * result is cached.
+ *
+ * A success is cached for the session. A failure is cached only briefly, so
+ * installing the CLI is picked up quickly rather than being remembered as
+ * missing for the rest of the window's life.
+ */
+let cached: { key: string; status: CliStatus; at: number } | undefined;
+const FAILURE_TTL_MS = 10_000;
+
+export function clearStartupCache(): void {
+  cached = undefined;
+}
+
+async function locateCached(override: string | undefined): Promise<CliStatus> {
+  const key = override ?? "";
+  if (cached && cached.key === key) {
+    const fresh = cached.status.ok || Date.now() - cached.at < FAILURE_TTL_MS;
+    if (fresh) return cached.status;
+  }
+  const started = Date.now();
+  const status = await locateClaude(override);
+  const took = Date.now() - started;
+  if (took > 3_000) {
+    log.info(`CLI discovery took ${(took / 1000).toFixed(1)}s — caching the result`);
+  }
+  cached = { key, status, at: Date.now() };
+  return status;
+}
+
 export async function checkStartup(
   context: vscode.ExtensionContext,
   claudePathOverride: string | undefined,
 ): Promise<Gate> {
   let status: CliStatus;
   try {
-    status = await locateClaude(claudePathOverride);
+    status = await locateCached(claudePathOverride);
   } catch (err) {
     log.error("CLI discovery threw", err);
     return { ready: false, reason: "CLI discovery failed" };

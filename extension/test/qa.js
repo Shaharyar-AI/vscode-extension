@@ -142,6 +142,120 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     ext.deactivate(); restore();
   }
 
+  // ── 1b. Recovery ───────────────────────────────────────────────────────
+  //
+  // Both bugs that reached a tester were of this shape: a correct dormant
+  // state that never recovered, and read as broken. The suite passed both
+  // times because it asserted "stays dormant" and stopped there.
+  section("1b. Recovery from dormant states");
+  {
+    const dir = path.join(TMP, "becomes-a-repo");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "index.html"), "<h1>hi</h1>\n");
+
+    const { vscode, state } = makeStub({ repo: dir });
+    const restore = install(vscode);
+    const ext = loadExtension(BUNDLE);
+    await ext.activate(makeContext(EXT_DIR));
+    await sleep(800);
+
+    check("plain folder starts dormant", /inactive/i.test(state.statusTooltip), state.statusTooltip);
+    const watching = state.fileWatchers.some((w) => /\.git\/HEAD/.test(w.pattern));
+    check("watches for a repository appearing", watching,
+      state.fileWatchers.map((w) => w.pattern).join(", ") || "no watchers armed");
+    check("offers a manual restart", state.commands.has("crTrack.restart"));
+
+    // The developer runs `git init` — the exact scenario that looked broken.
+    git(dir, "init", "-q");
+    git(dir, "config", "user.name", "QA Bot");
+    git(dir, "config", "user.email", "qa@example.com");
+    git(dir, "add", "-A");
+    git(dir, "commit", "-qm", "init");
+    for (const w of state.fileWatchers) w.fireCreate?.();
+    await sleep(8000);
+
+    check("recovers after git init, with no reload",
+      state.logLines.some((l) => /Active on/.test(l)),
+      "", `still dormant:\n${state.logLines.slice(-4).join("\n")}`);
+    ext.deactivate(); restore();
+  }
+  {
+    // Focus is the only signal for a CLI installed in another terminal.
+    const dir = path.join(TMP, "focus-recheck");
+    fs.mkdirSync(dir, { recursive: true });
+    const { vscode, state } = makeStub({ repo: dir });
+    const restore = install(vscode);
+    const ext = loadExtension(BUNDLE);
+    await ext.activate(makeContext(EXT_DIR));
+    await sleep(600);
+
+    check("listens for window focus while dormant", state.windowStateHandlers.length > 0,
+      `${state.windowStateHandlers.length} handler(s)`);
+
+    git(dir, "init", "-q");
+    git(dir, "config", "user.name", "QA Bot");
+    git(dir, "config", "user.email", "qa@example.com");
+    for (const h of state.windowStateHandlers) h({ focused: true });
+    await sleep(8000);
+
+    check("focus triggers a recheck", state.logLines.some((l) => /rechecking|Active on/.test(l)),
+      "", `no recheck happened:\n${state.logLines.slice(-4).join("\n")}`);
+    ext.deactivate(); restore();
+  }
+  {
+    // Asking for a review while inactive should retry, not just complain.
+    const dir = path.join(TMP, "review-retries");
+    fs.mkdirSync(dir, { recursive: true });
+    const { vscode, state } = makeStub({ repo: dir });
+    const restore = install(vscode);
+    const ext = loadExtension(BUNDLE);
+    await ext.activate(makeContext(EXT_DIR));
+    await sleep(600);
+
+    git(dir, "init", "-q");
+    git(dir, "config", "user.name", "QA Bot");
+    git(dir, "config", "user.email", "qa@example.com");
+    await run(state, "crTrack.reviewStaged");
+    await sleep(8000);
+
+    check("Review Staged retries startup when inactive",
+      state.logLines.some((l) => /Active on/.test(l)),
+      "", `never came up:\n${state.logLines.slice(-4).join("\n")}`);
+    ext.deactivate(); restore();
+  }
+
+  // ── 1c. Nothing staged ─────────────────────────────────────────────────
+  section("1c. Nothing staged is explained, not silent");
+  {
+    const repo = makeRepo("unstaged-only", {});
+    fs.writeFileSync(path.join(repo, "code.js"), "export function f(a){ return a.b.c }\n");
+    // Deliberately NOT staged.
+    const { state, restore, ext } = await boot(repo, { expectReview: false });
+    await sleep(2500);
+
+    check("status bar says so in its text, not just a tooltip",
+      /nothing staged/i.test(state.statusText), state.statusText);
+    check("tooltip counts the unstaged files",
+      /file\(s\) changed but not staged/i.test(String(state.statusTooltip)),
+      String(state.statusTooltip).split("\n")[0]);
+    check("panel switches to the nothing-staged welcome",
+      state.contexts.get("crTrack.nothingStaged") === true,
+      `context = ${state.contexts.get("crTrack.nothingStaged")}`);
+    check("log explains it", state.logLines.some((l) => /Nothing staged/.test(l)),
+      "", state.logLines.slice(-3).join(" | "));
+    check("a working-tree review is offered", state.commands.has("crTrack.reviewWorkingTree"));
+    ext.deactivate(); restore();
+  }
+  {
+    // A genuinely clean tree is a different thing and should read differently.
+    const repo = makeRepo("truly-clean", {});
+    const { state, restore, ext } = await boot(repo, { expectReview: false });
+    await sleep(2000);
+    check("a clean tree does not claim 'nothing staged'",
+      !/nothing staged/i.test(state.statusText), state.statusText);
+    ext.deactivate(); restore();
+  }
+
   // ── 2. Guides ──────────────────────────────────────────────────────────
   section("2. Guide resolution");
   {

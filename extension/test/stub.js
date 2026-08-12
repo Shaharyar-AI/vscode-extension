@@ -160,13 +160,19 @@ function makeStub({ repo, answers = {}, onLog }) {
     workspace: {
       workspaceFolders: repo ? [{ uri: Uri.file(repo), name: path.basename(repo), index: 0 }] : undefined,
       getConfiguration: () => ({ get: (_k, d) => d }),
-      createFileSystemWatcher: () => {
+      // Records its handlers so a test can fire disk events by hand — the
+      // recovery path is otherwise untestable without a real file watcher.
+      createFileSystemWatcher: (pattern) => {
+        const changed = [], created = [], deleted = [];
         const w = {
-          handlers: [],
-          onDidChange(h) { w.handlers.push(h); return disposable(); },
-          onDidCreate() { return disposable(); },
-          onDidDelete() { return disposable(); },
-          dispose() {},
+          pattern: pattern?.pattern ?? String(pattern),
+          onDidChange(h) { changed.push(h); return disposable(); },
+          onDidCreate(h) { created.push(h); return disposable(); },
+          onDidDelete(h) { deleted.push(h); return disposable(); },
+          fireChange(uri) { changed.forEach((h) => h(uri)); },
+          fireCreate(uri) { created.forEach((h) => h(uri)); },
+          disposed: false,
+          dispose() { this.disposed = true; },
         };
         state.fileWatchers.push(w);
         return w;
