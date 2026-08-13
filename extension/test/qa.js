@@ -277,6 +277,44 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     ext.deactivate(); restore();
   }
   {
+    // A folder that is genuinely not a repository must settle, not spin.
+    // The first recovery build throttled only the focus handler, so the file
+    // watcher re-entered start() without limit and the same three log lines
+    // repeated forever.
+    const dir = path.join(TMP, "never-a-repo");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules\n");
+    fs.writeFileSync(path.join(dir, "index.html"), "<h1>hi</h1>\n");
+
+    const { vscode, state } = makeStub({ repo: dir });
+    const restore = install(vscode);
+    const ext = loadExtension(BUNDLE);
+    await ext.activate(makeContext(EXT_DIR));
+    await sleep(1500);
+
+    // Hammer every recovery trigger the way a real editor would.
+    for (let i = 0; i < 25; i++) {
+      for (const w of state.fileWatchers) { w.fireCreate?.(); w.fireChange?.(); }
+      for (const h of state.windowStateHandlers) h({ focused: true });
+    }
+    await sleep(4000);
+
+    const warnings = state.logLines.filter((l) => /not a git repository/i.test(l)).length;
+    const rechecks = state.logLines.filter((l) => /rechecking/i.test(l)).length;
+    check("the dormant reason is logged once, not on every recheck",
+      warnings <= 2, `${warnings} occurrence(s)`,
+      `logged ${warnings} times — the output channel would fill up`);
+    check("recovery triggers are throttled",
+      rechecks <= 2, `${rechecks} recheck(s) from 25 bursts`,
+      `${rechecks} rechecks fired — this is the runaway loop`);
+    check("a no-repo folder offers to initialise one",
+      state.commands.has("crTrack.initRepository"));
+    check("the no-repo welcome view is selected",
+      state.contexts.get("crTrack.noRepo") === true,
+      `context = ${state.contexts.get("crTrack.noRepo")}`);
+    ext.deactivate(); restore();
+  }
+  {
     // A hidden activity-bar icon must not be a dead end.
     const dir = path.join(TMP, "menu-reachable");
     fs.mkdirSync(dir, { recursive: true });

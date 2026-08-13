@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.5
+
+- **Fixed a runaway recheck loop.** Recovery throttled only the window-focus
+  trigger, so the file watcher could restart the extension without limit. A
+  folder that genuinely is not a repository repeated the same three log lines
+  forever. All triggers are now throttled together, overlapping starts are
+  prevented, and a dormant reason is logged once rather than on every recheck.
+- **"Not a git repository" is now actionable.** The panel offers **Initialise a
+  repository here**, and the log explains that a `.gitignore` alone does not
+  make a folder a repository.
+
 ## 0.1.4
 
 Hardening pass. Every failure reported from a real machine so far has been

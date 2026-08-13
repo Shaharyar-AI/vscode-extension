@@ -87,6 +87,12 @@ export function isDubiousOwnership(detail: string): boolean {
   return /dubious ownership|safe\.directory/i.test(detail);
 }
 
+/** `git init`, for the common case of a project folder that was never a repo. */
+export async function initRepository(dir: string): Promise<boolean> {
+  const r = await run(GIT, ["init"], { cwd: dir, timeoutMs: 30_000 });
+  return r.code === 0;
+}
+
 export async function trustDirectory(dir: string): Promise<boolean> {
   const r = await run(GIT, ["config", "--global", "--add", "safe.directory", dir], {
     timeoutMs: 15_000,

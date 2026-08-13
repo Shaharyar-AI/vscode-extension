@@ -18,7 +18,8 @@ import { StatusBar } from "./status";
 import { FindingsTree } from "./tree";
 import { IndexWatcher } from "./watcher";
 import {
-  checkRepo, gitPath, isDubiousOwnership, locateGit, readRepoContext, setGitPath, trustDirectory,
+  checkRepo, gitPath, initRepository, isDubiousOwnership, locateGit, readRepoContext,
+  setGitPath, trustDirectory,
 } from "@engine/git";
 import { findReferencesDir } from "@engine/prompt";
 import type { Finding } from "@engine/types";
@@ -190,10 +191,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  */
 let recovery: vscode.Disposable | undefined;
 let lastRecheck = 0;
+/** Guards against overlapping starts; two rechecks a millisecond apart stack. */
+let starting = false;
+/** The last dormant reason logged, so an unchanged state stays quiet. */
+let lastDormantReason: string | undefined;
+
+const RECHECK_INTERVAL_MS = 15_000;
 
 function disarmRecovery(): void {
   recovery?.dispose();
   recovery = undefined;
+}
+
+/**
+ * Every recovery trigger funnels through here.
+ *
+ * The first version throttled only the focus handler, so the file watcher could
+ * re-enter `start()` without limit — a folder that is legitimately not a
+ * repository produced an endless recheck loop, visible as the same three log
+ * lines repeating forever. Throttling one caller is not throttling.
+ */
+function requestRecheck(
+  context: vscode.ExtensionContext,
+  status: StatusBar,
+  why: string,
+): void {
+  if (session || starting) return;
+  const now = Date.now();
+  if (now - lastRecheck < RECHECK_INTERVAL_MS) return;
+  lastRecheck = now;
+  log.info(`${why} — rechecking`);
+  void start(context, status).catch((err) => log.error("Recheck failed", err));
 }
 
 function armRecovery(
@@ -203,10 +231,6 @@ function armRecovery(
 ): void {
   disarmRecovery();
   const parts: vscode.Disposable[] = [];
-  const restart = (why: string) => {
-    log.info(`${why} — rechecking`);
-    void start(context, status).catch((err) => log.error("Restart failed", err));
-  };
 
   if (folderPath) {
     // `.git/HEAD` is created by `git init` and by `git clone`, and unlike the
@@ -214,20 +238,16 @@ function armRecovery(
     const watcher = vscode.workspace.createFileSystemWatcher(
       new vscode.RelativePattern(vscode.Uri.file(folderPath), ".git/HEAD"),
     );
-    watcher.onDidCreate(() => restart("A git repository appeared"));
-    watcher.onDidChange(() => restart("The git repository changed"));
+    watcher.onDidCreate(() => requestRecheck(context, status, "A git repository appeared"));
+    watcher.onDidChange(() => requestRecheck(context, status, "The git repository changed"));
     parts.push(watcher);
   }
 
   // Catches everything a file watcher cannot see — a CLI installed in another
-  // terminal, a `claude` login. Throttled, and only ever while dormant.
+  // terminal, a `claude` login.
   parts.push(
     vscode.window.onDidChangeWindowState((e) => {
-      if (!e.focused || session) return;
-      const now = Date.now();
-      if (now - lastRecheck < 15_000) return;
-      lastRecheck = now;
-      restart("Window focused while inactive");
+      if (e.focused) requestRecheck(context, status, "Window focused while inactive");
     }),
   );
 
@@ -235,6 +255,16 @@ function armRecovery(
 }
 
 async function start(context: vscode.ExtensionContext, status: StatusBar): Promise<void> {
+  if (starting) return;
+  starting = true;
+  try {
+    await startInner(context, status);
+  } finally {
+    starting = false;
+  }
+}
+
+async function startInner(context: vscode.ExtensionContext, status: StatusBar): Promise<void> {
   session?.dispose();
   session = undefined;
 
@@ -289,14 +319,23 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
         : repoCheck.reason === "git-error"
           ? "git reported a problem"
           : "this folder is not a git repository";
-    log.warn(`${cwd}: ${summary}`);
-    log.info(`  git = ${gitPath()}`);
-    log.info(`  ${repoCheck.detail}`);
-    log.info(
-      repoCheck.reason === "not-a-repo"
-        ? "  Watching for a repository to appear."
-        : '  Run "CR-Track: Diagnose" for the full picture, then "CR-Track: Restart".',
-    );
+    // Log the reason once. Repeating it on every recheck buries everything
+    // else in the output channel and reads like a fault in itself.
+    const fingerprint = `${cwd}|${repoCheck.reason}`;
+    if (lastDormantReason !== fingerprint) {
+      lastDormantReason = fingerprint;
+      log.warn(`${cwd}: ${summary}`);
+      log.info(`  git = ${gitPath()}`);
+      log.info(`  ${repoCheck.detail}`);
+      log.info(
+        repoCheck.reason === "not-a-repo"
+          ? '  This folder has no .git directory. Run `git init`, open the repository that ' +
+            'contains it, or use "CR-Track: Initialize Repository". Rechecking quietly from here.'
+          : '  Run "CR-Track: Diagnose" for the full picture, then "CR-Track: Restart".',
+      );
+    }
+    void vscode.commands.executeCommand("setContext", "crTrack.noRepo",
+      repoCheck.reason === "not-a-repo");
     status.dormant(summary);
     armRecovery(context, status, cwd);
     return;
@@ -360,6 +399,8 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
     watcher,
   );
   disarmRecovery(); // running now; nothing left to wait for
+  lastDormantReason = undefined;
+  void vscode.commands.executeCommand("setContext", "crTrack.noRepo", false);
   status.update(orchestrator.state);
   log.info(`Active on ${repo.name} (${repo.branch})`);
 
@@ -561,11 +602,36 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     log.info('If anything above is wrong, fix it and run "CR-Track: Restart".');
   });
 
+  register("crTrack.initRepository", async () => {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) {
+      void vscode.window.showWarningMessage("CR-Track: open a folder first.");
+      return;
+    }
+    const dir = folder.uri.fsPath;
+    const confirm = await vscode.window.showWarningMessage(
+      `Initialise a git repository in ${dir}?`,
+      { modal: true, detail: "Runs `git init`. Nothing is committed and no files are changed." },
+      "Initialise",
+    );
+    if (confirm !== "Initialise") return;
+
+    const ok = await initRepository(dir);
+    if (ok) {
+      log.info(`Initialised a git repository in ${dir}`);
+      await start(context, status);
+    } else {
+      void vscode.window.showErrorMessage("CR-Track: `git init` failed. See the log.");
+      log.show();
+    }
+  });
+
   register("crTrack.menu", async () => {
     const active = Boolean(session);
     const pick = await vscode.window.showQuickPick(
       [
         { label: "$(search-fuzzy) Review staged changes", id: "crTrack.reviewStaged" },
+        { label: "$(repo) Initialise a git repository here", id: "crTrack.initRepository" },
         { label: "$(git-compare) Review working tree", id: "crTrack.reviewWorkingTree" },
         { label: "$(list-tree) Open the Findings panel", id: "crTrack.focusView" },
         { label: "$(pulse) Diagnose", id: "crTrack.diagnose", description: "why isn't it working?" },
