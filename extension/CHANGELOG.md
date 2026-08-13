@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.4
+
+Hardening pass. Every failure reported from a real machine so far has been
+environmental, so this release stops assuming a tidy one.
+
+- **Git is found even when it is not on PATH.** CR-Track now checks
+  `crTrack.gitPath`, then VS Code's `git.path`, then PATH, then the locations
+  git actually installs to — including the copy bundled with GitHub Desktop.
+  A window whose PATH lacks git no longer reports "not a git repository".
+- **Dubious ownership offers a fix.** Git refuses repositories owned by another
+  user account, common on a second drive. CR-Track now recognises it and offers
+  **Trust this folder** rather than reporting a dead end.
+- **Everything is reachable when the activity-bar icon is hidden.** The status
+  bar reads *inactive* and opens a menu with review, panel, diagnose, restart,
+  log and settings.
+- Added a `crTrack.gitPath` setting.
+
 ## 0.1.3
 
 - **"Not a git repository" was reported for problems that were nothing of the

@@ -76,12 +76,17 @@ export class StatusBar implements vscode.Disposable {
     }
   }
 
-  /** Extension is installed but not operating — say why on hover, quietly. */
+  /**
+   * Installed but not operating. Says so in the text rather than only on hover,
+   * and still opens the menu — an inactive extension the user cannot act on is
+   * the worst of both worlds.
+   */
   dormant(reason: string): void {
-    this.item.text = "$(shield) CR-Track";
-    this.item.tooltip = `CR-Track is inactive — ${reason}`;
+    this.item.text = "$(shield) CR-Track · inactive";
+    this.item.tooltip = `CR-Track is inactive — ${reason}.
+Click for options, including Diagnose.`;
     this.item.backgroundColor = undefined;
-    this.item.command = "crTrack.showOutput";
+    this.item.command = "crTrack.menu";
   }
 
   dispose(): void {

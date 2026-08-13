@@ -17,7 +17,9 @@ import { checkStartup, clearStartupCache } from "./startup";
 import { StatusBar } from "./status";
 import { FindingsTree } from "./tree";
 import { IndexWatcher } from "./watcher";
-import { checkRepo, gitPath, readRepoContext, setGitPath } from "@engine/git";
+import {
+  checkRepo, gitPath, isDubiousOwnership, locateGit, readRepoContext, setGitPath, trustDirectory,
+} from "@engine/git";
 import { findReferencesDir } from "@engine/prompt";
 import type { Finding } from "@engine/types";
 import { buildReport, type FindingOutcome } from "@engine/report";
@@ -243,13 +245,43 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
     return;
   }
 
-  // Honour VS Code's own git location before shelling out. A window that did
-  // not inherit git on PATH still has a working Source Control panel, so
-  // "not a git repository" would be flatly wrong there.
-  setGitPath(vscode.workspace.getConfiguration("git").get<string>("path") || undefined);
+  // Find a git we can actually run: explicit setting, then VS Code's own
+  // git.path, then PATH, then the places git installs to. Source Control
+  // working while CR-Track claims "no repository" means we looked in fewer
+  // places than the editor did.
+  const gitOverride =
+    vscode.workspace.getConfiguration("crTrack").get<string>("gitPath")?.trim() ||
+    vscode.workspace.getConfiguration("git").get<string>("path") ||
+    undefined;
+  const foundGit = await locateGit(gitOverride);
+  if (foundGit) {
+    log.info(`Git ${foundGit.version} at ${foundGit.path}`);
+  } else {
+    setGitPath(gitOverride);
+    log.warn("No usable git found on PATH or in the usual install locations");
+  }
 
   const cwd = folder.uri.fsPath;
-  const repoCheck = await checkRepo(cwd);
+  let repoCheck = await checkRepo(cwd);
+
+  // Windows refuses repositories owned by another user. One command fixes it,
+  // so offer that instead of reporting a dead end.
+  if (!repoCheck.ok && isDubiousOwnership(repoCheck.detail)) {
+    log.warn(`Git refused ${cwd} as owned by another user`);
+    const choice = await vscode.window.showWarningMessage(
+      `CR-Track: git will not open ${cwd} because it is owned by another user account.`,
+      "Trust this folder",
+      "Show log",
+    );
+    if (choice === "Trust this folder") {
+      const ok = await trustDirectory(cwd);
+      log.info(ok ? `Added ${cwd} to git safe.directory` : "Could not update safe.directory");
+      if (ok) repoCheck = await checkRepo(cwd);
+    } else if (choice === "Show log") {
+      log.show();
+    }
+  }
+
   if (!repoCheck.ok) {
     const summary =
       repoCheck.reason === "git-missing"
@@ -260,11 +292,11 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
     log.warn(`${cwd}: ${summary}`);
     log.info(`  git = ${gitPath()}`);
     log.info(`  ${repoCheck.detail}`);
-    if (repoCheck.reason !== "not-a-repo") {
-      log.info(`  Fix the above, then run "CR-Track: Restart".`);
-    } else {
-      log.info(`  Watching for a repository to appear.`);
-    }
+    log.info(
+      repoCheck.reason === "not-a-repo"
+        ? "  Watching for a repository to appear."
+        : '  Run "CR-Track: Diagnose" for the full picture, then "CR-Track: Restart".',
+    );
     status.dormant(summary);
     armRecovery(context, status, cwd);
     return;
@@ -527,6 +559,31 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     log.info(`endpoint      : ${readEndpoint(folder?.uri.fsPath) ?? "(none — reports stay local)"}`);
     log.info("─────────────────────────────");
     log.info('If anything above is wrong, fix it and run "CR-Track: Restart".');
+  });
+
+  register("crTrack.menu", async () => {
+    const active = Boolean(session);
+    const pick = await vscode.window.showQuickPick(
+      [
+        { label: "$(search-fuzzy) Review staged changes", id: "crTrack.reviewStaged" },
+        { label: "$(git-compare) Review working tree", id: "crTrack.reviewWorkingTree" },
+        { label: "$(list-tree) Open the Findings panel", id: "crTrack.focusView" },
+        { label: "$(pulse) Diagnose", id: "crTrack.diagnose", description: "why isn't it working?" },
+        { label: "$(refresh) Restart", id: "crTrack.restart" },
+        { label: "$(output) Show log", id: "crTrack.showOutput" },
+        { label: "$(gear) Settings", id: "crTrack.openSettings" },
+      ],
+      { title: `CR-Track — ${active ? "active" : "inactive"}`, placeHolder: "Choose an action" },
+    );
+    if (pick) await vscode.commands.executeCommand(pick.id);
+  });
+
+  register("crTrack.focusView", () => {
+    void vscode.commands.executeCommand("workbench.view.extension.crTrackContainer");
+  });
+
+  register("crTrack.openSettings", () => {
+    void vscode.commands.executeCommand("workbench.action.openSettings", "crTrack");
   });
 
   register("crTrack.showOutput", () => log.show());

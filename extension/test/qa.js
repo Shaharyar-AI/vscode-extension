@@ -224,6 +224,85 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     ext.deactivate(); restore();
   }
 
+  // ── 1bb. Hostile environments ──────────────────────────────────────────
+  //
+  // Every failure a real machine produced was environmental, and the suite
+  // missed all of them because it runs somewhere tidy. These deliberately
+  // break the environment.
+  section("1bb. Hostile environments");
+  {
+    const repo = makeRepo("git-off-path", { "a.js": "export const a = 1;\n" });
+    stage(repo);
+
+    // Remove every directory containing a git binary from PATH — a window
+    // launched from a shortcut that never sourced a git-aware profile.
+    const realPath = process.env.PATH ?? "";
+    process.env.PATH = realPath
+      .split(path.delimiter)
+      .filter((d) => {
+        try {
+          return !fs.existsSync(path.join(d, "git.exe")) && !fs.existsSync(path.join(d, "git"));
+        } catch {
+          return true;
+        }
+      })
+      .join(path.delimiter);
+
+    let stillOnPath = true;
+    try {
+      execFileSync("git", ["--version"], { stdio: "ignore" });
+    } catch {
+      stillOnPath = false;
+    }
+
+    const { vscode, state } = makeStub({ repo });
+    const restore = install(vscode);
+    const ext = loadExtension(BUNDLE);
+    await ext.activate(makeContext(EXT_DIR));
+    await sleep(6000);
+    process.env.PATH = realPath;
+
+    check("test setup actually removed git from PATH", !stillOnPath,
+      "", "git is still on PATH, so this proves nothing");
+    check("finds git in its install location when PATH lacks it",
+      state.logLines.some((l) => /Git \d+\.\d+/.test(l)),
+      state.logLines.find((l) => /Git \d|No usable git/.test(l))?.trim(),
+      `never located git:\n${state.logLines.slice(0, 4).join("\n")}`);
+    check("comes up rather than claiming there is no repository",
+      state.logLines.some((l) => /Active on/.test(l)),
+      "", `stayed dormant:\n${state.logLines.slice(0, 5).join("\n")}`);
+    check("never reports 'not a git repository' for a real repo",
+      !state.logLines.some((l) => /not a git repository/i.test(l)),
+      "", "reported the misleading message");
+    ext.deactivate(); restore();
+  }
+  {
+    // A hidden activity-bar icon must not be a dead end.
+    const dir = path.join(TMP, "menu-reachable");
+    fs.mkdirSync(dir, { recursive: true });
+    const { state, restore, ext } = await boot(dir, { expectReview: false });
+    await sleep(600);
+    for (const id of ["crTrack.menu", "crTrack.focusView", "crTrack.diagnose", "crTrack.restart"]) {
+      check(`${id} is available while inactive`, state.commands.has(id));
+    }
+    check("status bar says inactive in its text", /inactive/i.test(state.statusText), state.statusText);
+    ext.deactivate(); restore();
+  }
+  {
+    // Diagnose has to work when nothing else does — that is its whole job.
+    const dir = path.join(TMP, "diagnose-when-broken");
+    fs.mkdirSync(dir, { recursive: true });
+    const { state, restore, ext } = await boot(dir, { expectReview: false });
+    state.logLines.length = 0;
+    await run(state, "crTrack.diagnose");
+    await sleep(3000);
+    const dump = state.logLines.join("\n");
+    check("diagnose reports git, repo, CLI and guides",
+      /git binary/.test(dump) && /git repo/.test(dump) && /claude cli/.test(dump) && /guides/.test(dump),
+      "", `incomplete output:\n${dump}`);
+    ext.deactivate(); restore();
+  }
+
   // ── 1c. Nothing staged ─────────────────────────────────────────────────
   section("1c. Nothing staged is explained, not silent");
   {

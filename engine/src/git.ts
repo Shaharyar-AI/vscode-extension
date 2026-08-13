@@ -3,7 +3,9 @@
  * model never runs a git command.
  */
 
-import { basename } from "node:path";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import { run, runOrThrow } from "./proc";
 import { languageFor } from "./languages";
 import type { ChangeType, DiffStats, FileChange, RepoContext, Scope } from "./types";
@@ -24,6 +26,85 @@ export function setGitPath(path: string | undefined): void {
 
 export function gitPath(): string {
   return GIT;
+}
+
+/** Places git actually installs to when it is not on PATH. */
+function gitCandidates(): string[] {
+  const home = homedir();
+  if (process.platform === "win32") {
+    const pf = process.env["ProgramFiles"] ?? "C:\\Program Files";
+    const pf86 = process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
+    const local = process.env["LOCALAPPDATA"] ?? join(home, "AppData", "Local");
+    return [
+      join(pf, "Git", "cmd", "git.exe"),
+      join(pf86, "Git", "cmd", "git.exe"),
+      join(local, "Programs", "Git", "cmd", "git.exe"),
+      // GitHub Desktop ships its own git and never touches PATH.
+      join(local, "GitHubDesktop", "app", "resources", "app", "git", "cmd", "git.exe"),
+      join(pf, "Git", "bin", "git.exe"),
+    ];
+  }
+  return [
+    "/usr/bin/git",
+    "/usr/local/bin/git",
+    "/opt/homebrew/bin/git",
+    "/Applications/Xcode.app/Contents/Developer/usr/bin/git",
+  ];
+}
+
+/**
+ * Find a usable git.
+ *
+ * Tried in order: an explicit override, PATH, then known install locations.
+ * The last step is what saves the machines where git exists and simply is not
+ * on the PATH the editor inherited — a case that otherwise presents as "this
+ * folder is not a git repository", which is both wrong and unactionable.
+ */
+export async function locateGit(override?: string): Promise<{ path: string; version: string } | null> {
+  const tried = [override, "git", ...gitCandidates()].filter(Boolean) as string[];
+
+  for (const candidate of tried) {
+    if (candidate !== "git" && candidate !== override && !existsSync(candidate)) continue;
+    try {
+      const r = await run(candidate, ["--version"], { timeoutMs: 10_000 });
+      if (r.code !== 0) continue;
+      const version = r.stdout.trim().replace(/^git version\s*/i, "");
+      GIT = candidate;
+      return { path: candidate, version };
+    } catch {
+      // ENOENT for a name that is not on PATH — keep looking.
+    }
+  }
+  return null;
+}
+
+/**
+ * Windows refuses to operate on a repository owned by another user, which is
+ * common on a second drive or a cloned profile. The fix is one command, so it
+ * is worth detecting precisely rather than lumping in with other errors.
+ */
+export function isDubiousOwnership(detail: string): boolean {
+  return /dubious ownership|safe\.directory/i.test(detail);
+}
+
+export async function trustDirectory(dir: string): Promise<boolean> {
+  const r = await run(GIT, ["config", "--global", "--add", "safe.directory", dir], {
+    timeoutMs: 15_000,
+  });
+  return r.code === 0;
+}
+
+/**
+ * Walk up looking for a repository.
+ *
+ * Opening a subdirectory of a repo is normal, and so is opening a parent that
+ * contains one. Checking only the folder that happens to be open turns both
+ * into "not a git repository".
+ */
+export async function findRepoRoot(startDir: string): Promise<string | null> {
+  const r = await run(GIT, ["rev-parse", "--show-toplevel"], { cwd: startDir, timeoutMs: 15_000 });
+  if (r.code === 0 && r.stdout.trim()) return r.stdout.trim();
+  return null;
 }
 
 async function git(cwd: string, args: string[]): Promise<string> {
