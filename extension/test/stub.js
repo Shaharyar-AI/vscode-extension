@@ -148,7 +148,16 @@ function makeStub({ repo, answers = {}, onLog }) {
         return queues.input.shift();
       },
       showTextDocument: async () => ({ revealRange() {}, set selection(_v) {} }),
-      withProgress: async (_o, task) => task({ report() {} }, { isCancellationRequested: false }),
+      withProgress: async (_o, task) => {
+        // A real CancellationToken shape. The previous placeholder lacked
+        // onCancellationRequested, so any code registering for cancellation
+        // threw — and the harness reported it as "no findings".
+        const token = {
+          isCancellationRequested: false,
+          onCancellationRequested: () => ({ dispose() {} }),
+        };
+        return task({ report() {} }, token);
+      },
       onDidChangeWindowState: (h) => { state.windowStateHandlers.push(h); return disposable(); },
       createTreeView: (id, opts) => {
         const view = { id, provider: opts.treeDataProvider, badge: undefined, title: undefined, dispose() {} };

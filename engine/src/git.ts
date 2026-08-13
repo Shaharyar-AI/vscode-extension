@@ -20,8 +20,16 @@ import type { ChangeType, DiffStats, FileChange, RepoContext, Scope } from "./ty
  */
 let GIT = "git";
 
-export function setGitPath(path: string | undefined): void {
-  GIT = path?.trim() || "git";
+/**
+ * VS Code declares `git.path` as string | null | array — an array is the
+ * documented way to list several installs, which is exactly what a Windows
+ * machine with Git for Windows *and* GitHub Desktop invites. Assuming a string
+ * here threw `path.trim is not a function` out of activation, leaving the
+ * status bar frozen and the log empty after the first line.
+ */
+export function setGitPath(path: string | string[] | null | undefined): void {
+  const first = Array.isArray(path) ? path.find((p) => typeof p === "string" && p.trim()) : path;
+  GIT = typeof first === "string" && first.trim() ? first.trim() : "git";
 }
 
 export function gitPath(): string {
@@ -60,11 +68,17 @@ function gitCandidates(): string[] {
  * on the PATH the editor inherited — a case that otherwise presents as "this
  * folder is not a git repository", which is both wrong and unactionable.
  */
-export async function locateGit(override?: string): Promise<{ path: string; version: string } | null> {
-  const tried = [override, "git", ...gitCandidates()].filter(Boolean) as string[];
+export async function locateGit(
+  override?: string | string[] | null,
+): Promise<{ path: string; version: string } | null> {
+  const overrides = (Array.isArray(override) ? override : [override]).filter(
+    (p): p is string => typeof p === "string" && p.trim().length > 0,
+  );
+  const tried = [...overrides, "git", ...gitCandidates()];
 
   for (const candidate of tried) {
-    if (candidate !== "git" && candidate !== override && !existsSync(candidate)) continue;
+    const isOverride = overrides.includes(candidate);
+    if (candidate !== "git" && !isOverride && !existsSync(candidate)) continue;
     try {
       const r = await run(candidate, ["--version"], { timeoutMs: 10_000 });
       if (r.code !== 0) continue;

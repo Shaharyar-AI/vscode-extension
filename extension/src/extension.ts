@@ -22,7 +22,9 @@ import {
   setGitPath, trustDirectory,
 } from "@engine/git";
 import { findReferencesDir } from "@engine/prompt";
-import type { Finding } from "@engine/types";
+import { collectFiles, synthesizeDiff } from "@engine/files";
+import { runReview } from "@engine/review";
+import type { Finding, RepoContext } from "@engine/types";
 import { buildReport, type FindingOutcome } from "@engine/report";
 import { deliver, flushQueue } from "@engine/telemetry";
 
@@ -40,30 +42,123 @@ function findingOf(arg: unknown): Finding | undefined {
   return undefined;
 }
 
-/** Everything that exists only while a usable repo + CLI are present. */
+/** The half of the extension that genuinely needs a git repository. */
+interface GitFeatures {
+  repo: RepoContext;
+  orchestrator: Orchestrator;
+  watcher: IndexWatcher;
+}
+
+/** Everything that exists once a folder and a usable CLI are present. */
 class Session implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
+    /** Repo root when there is one, otherwise the open folder. */
     readonly repoRoot: string,
-    readonly orchestrator: Orchestrator,
     readonly diagnostics: DiagnosticsView,
     readonly status: StatusBar,
     readonly fixes: FixProvider,
     readonly tree: FindingsTree,
     readonly settings: () => Settings,
+    readonly claudePath: string,
     readonly cliVersion: string | undefined,
     readonly extensionVersion: string,
-    watcher: IndexWatcher,
+    readonly referencesDir: string | null,
+    /** Absent when the folder is not a git repository. */
+    readonly git: GitFeatures | undefined,
   ) {
-    this.disposables.push(orchestrator, diagnostics, fixes, tree, watcher);
+    this.disposables.push(diagnostics, fixes, tree);
+    if (git) {
+      this.disposables.push(git.orchestrator, git.watcher);
+      this.disposables.push(
+        git.orchestrator.onDidChangeState((state) => {
+          status.update(state);
+          this.render(state);
+        }),
+      );
+    }
+  }
 
-    this.disposables.push(
-      orchestrator.onDidChangeState((state) => {
-        status.update(state);
-        this.render(state);
-      }),
-    );
+  get orchestrator(): Orchestrator | undefined {
+    return this.git?.orchestrator;
+  }
+
+  /**
+   * Review complete files, with no git involved.
+   *
+   * This is the path that keeps the extension useful in a folder that is not a
+   * repository — a downloaded project, a scratch directory, anything a
+   * colleague sent over. It reuses the engine wholesale; only the trigger and
+   * the prompt's framing differ.
+   */
+  async reviewFiles(absPaths: string[]): Promise<void> {
+    const { files, skipped } = collectFiles(absPaths, this.repoRoot);
+
+    for (const s of skipped) log.info(`Skipped ${s.path} — ${s.reason}`);
+    if (files.length === 0) {
+      void vscode.window.showInformationMessage(
+        skipped.length
+          ? `CR-Track: nothing reviewable there (${skipped[0]?.reason}).`
+          : "CR-Track: nothing to review.",
+      );
+      return;
+    }
+
+    const cfg = this.settings();
+    const label = files.length === 1 ? files[0]!.path : `${files.length} files`;
+    log.info(`Reviewing ${label} as complete file(s) (${cfg.model}, effort ${cfg.effort})`);
+    this.status.busy(`Reviewing ${label}…`);
+
+    try {
+      const result = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: `CR-Track: reviewing ${label}…`, cancellable: true },
+        (_p, token) =>
+          runReview({
+            claudePath: this.claudePath,
+            repoRoot: this.repoRoot,
+            diff: synthesizeDiff(files),
+            changedPaths: files.map((f) => f.path),
+            config: cfg,
+            referencesDir: this.referencesDir,
+            mode: "files",
+            // Defensive: losing cancellation is a missing convenience, but an
+            // exception here would abort the review entirely.
+            onSpawn: (kill) => {
+              try {
+                token?.onCancellationRequested?.(() => kill());
+              } catch {
+                /* no cancellation available — the review still runs */
+              }
+            },
+          }),
+      );
+
+      if (result.error) {
+        log.warn(`File review failed: ${result.error}`);
+        this.status.failed(result.error);
+        void vscode.window.showWarningMessage(`CR-Track: ${result.error}`, "Show log")
+          .then((c) => c === "Show log" && log.show());
+        return;
+      }
+
+      this.fixes.reset();
+      this.diagnostics.show(result.findings);
+      this.tree.setFindings(result.findings);
+      this.status.fileReview(result.findings, label);
+      log.info(
+        `File review complete in ${(result.durationMs / 1000).toFixed(0)}s — ` +
+          `${result.findings.length} finding(s)`,
+      );
+      if (result.findings.length > 0) {
+        void vscode.commands.executeCommand("workbench.view.extension.crTrackContainer");
+      } else {
+        void vscode.window.showInformationMessage(`CR-Track: no findings in ${label}.`);
+      }
+    } catch (err) {
+      log.error("File review threw", err);
+      this.status.failed((err as Error).message);
+    }
   }
 
   /**
@@ -73,8 +168,8 @@ class Session implements vscode.Disposable {
    * interrupt a commit.
    */
   async report(overrideReason?: string): Promise<void> {
-    const state = this.orchestrator.state;
-    if (state.kind !== "done") return;
+    const state = this.git?.orchestrator.state;
+    if (!state || state.kind !== "done") return;
     const { outcome } = state;
 
     try {
@@ -189,8 +284,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  * Checking once at activation and never again means the fix appears to do
  * nothing and the extension looks broken.
  */
+/**
+ * The single source of truth for which git to use. Startup and Diagnose must
+ * resolve it identically — when they did not, Diagnose reset the discovered
+ * path to a bare "git", reported a working repository as missing, and left
+ * every later git call in the session broken.
+ */
+function gitOverrideSetting(): string | string[] | undefined {
+  const own = vscode.workspace.getConfiguration("crTrack").get<string>("gitPath")?.trim();
+  if (own) return own;
+  const fromGitExt = vscode.workspace
+    .getConfiguration("git")
+    .get<string | string[] | null>("path");
+  return fromGitExt ?? undefined;
+}
+
 let recovery: vscode.Disposable | undefined;
 let lastRecheck = 0;
+/** A deferred recheck for an edge that arrived inside the throttle window. */
+let pendingRecheck: NodeJS.Timeout | undefined;
 /** Guards against overlapping starts; two rechecks a millisecond apart stack. */
 let starting = false;
 /** The last dormant reason logged, so an unchanged state stays quiet. */
@@ -201,6 +313,10 @@ const RECHECK_INTERVAL_MS = 15_000;
 function disarmRecovery(): void {
   recovery?.dispose();
   recovery = undefined;
+  if (pendingRecheck) {
+    clearTimeout(pendingRecheck);
+    pendingRecheck = undefined;
+  }
 }
 
 /**
@@ -216,9 +332,24 @@ function requestRecheck(
   status: StatusBar,
   why: string,
 ): void {
-  if (session || starting) return;
+  // `session?.git`, not `session`. A file-review session exists in a folder
+  // that is not a repository, and that is exactly the case we still want to
+  // recover from when `git init` runs.
+  if (session?.git || starting) return;
   const now = Date.now();
-  if (now - lastRecheck < RECHECK_INTERVAL_MS) return;
+  const waited = now - lastRecheck;
+  if (waited < RECHECK_INTERVAL_MS) {
+    // The triggers are edges, not levels: `.git/HEAD` is created exactly once
+    // by `git init`. Dropping a suppressed call loses that edge forever, so
+    // defer it to the end of the window instead.
+    if (!pendingRecheck) {
+      pendingRecheck = setTimeout(() => {
+        pendingRecheck = undefined;
+        requestRecheck(context, status, why);
+      }, RECHECK_INTERVAL_MS - waited);
+    }
+    return;
+  }
   lastRecheck = now;
   log.info(`${why} — rechecking`);
   void start(context, status).catch((err) => log.error("Recheck failed", err));
@@ -279,10 +410,7 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
   // git.path, then PATH, then the places git installs to. Source Control
   // working while CR-Track claims "no repository" means we looked in fewer
   // places than the editor did.
-  const gitOverride =
-    vscode.workspace.getConfiguration("crTrack").get<string>("gitPath")?.trim() ||
-    vscode.workspace.getConfiguration("git").get<string>("path") ||
-    undefined;
+  const gitOverride = gitOverrideSetting();
   const foundGit = await locateGit(gitOverride);
   if (foundGit) {
     log.info(`Git ${foundGit.version} at ${foundGit.path}`);
@@ -312,13 +440,19 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
     }
   }
 
-  if (!repoCheck.ok) {
+  // A failed repo check no longer ends the startup. Git decides *what* to
+  // review; it was never supposed to decide *whether* CR-Track can review at
+  // all. Without a repository the extension loses staged reviews and the
+  // commit gate, and keeps file review — which is the difference between
+  // "limited here" and "does nothing here".
+  const hasRepo = repoCheck.ok;
+  if (!hasRepo) {
     const summary =
       repoCheck.reason === "git-missing"
         ? "git could not be run"
         : repoCheck.reason === "git-error"
           ? "git reported a problem"
-          : "this folder is not a git repository";
+          : "no git repository";
     // Log the reason once. Repeating it on every recheck buries everything
     // else in the output channel and reads like a fault in itself.
     const fingerprint = `${cwd}|${repoCheck.reason}`;
@@ -329,20 +463,18 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
       log.info(`  ${repoCheck.detail}`);
       log.info(
         repoCheck.reason === "not-a-repo"
-          ? '  This folder has no .git directory. Run `git init`, open the repository that ' +
-            'contains it, or use "CR-Track: Initialize Repository". Rechecking quietly from here.'
+          ? '  Staged review and the commit gate need a repository. File review still ' +
+            'works: right-click a file or folder and choose "CR-Track: Review". ' +
+            'To enable the rest, use "CR-Track: Initialize Repository".'
           : '  Run "CR-Track: Diagnose" for the full picture, then "CR-Track: Restart".',
       );
     }
-    void vscode.commands.executeCommand("setContext", "crTrack.noRepo",
-      repoCheck.reason === "not-a-repo");
-    status.dormant(summary);
-    armRecovery(context, status, cwd);
-    return;
   }
+  void vscode.commands.executeCommand("setContext", "crTrack.noRepo", !hasRepo);
 
-  const repo = await readRepoContext(cwd);
-  const settings = (): Settings => readSettings(repo.root);
+  const repo = hasRepo ? await readRepoContext(cwd) : undefined;
+  const root = repo?.root ?? cwd;
+  const settings = (): Settings => readSettings(root);
 
   if (!settings().enabled) {
     log.info("Disabled via crTrack.enabled");
@@ -351,6 +483,7 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
     return;
   }
 
+  // The CLI is required for any review at all, repository or not.
   const gate = await checkStartup(context, settings().claudePath);
   if (!gate.ready || !gate.claudePath) {
     status.dormant(gate.reason ?? "the Claude CLI is unavailable");
@@ -372,56 +505,95 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
     );
   }
 
-  const orchestrator = new Orchestrator(repo.root, gate.claudePath, settings, referencesDir);
-  const diagnostics = new DiagnosticsView(repo.root);
+  const diagnostics = new DiagnosticsView(root);
   const fixes = new FixProvider(diagnostics);
-  const tree = new FindingsTree(repo.root, fixes);
-  const watcher = new IndexWatcher(
-    repo.root,
-    () => settings().debounceMs,
-    () => {
-      // A new staged set invalidates the previous review's outcomes.
-      fixes.reset();
-      void orchestrator.review().catch((err) => log.error("Review threw", err));
-    },
-  );
+  const tree = new FindingsTree(root, fixes);
+
+  // Git-backed features, only when there is a repository to back them.
+  let gitFeatures: GitFeatures | undefined;
+  if (repo) {
+    const orchestrator = new Orchestrator(repo.root, gate.claudePath, settings, referencesDir);
+    const watcher = new IndexWatcher(
+      repo.root,
+      () => settings().debounceMs,
+      () => {
+        // A new staged set invalidates the previous review's outcomes.
+        fixes.reset();
+        void orchestrator.review().catch((err) => log.error("Review threw", err));
+      },
+    );
+    gitFeatures = { repo, orchestrator, watcher };
+  }
 
   session = new Session(
-    repo.root,
-    orchestrator,
+    root,
     diagnostics,
     status,
     fixes,
     tree,
     settings,
+    gate.claudePath,
     gate.version,
     context.extension?.packageJSON?.version ?? "0.0.0",
-    watcher,
+    referencesDir,
+    gitFeatures,
   );
-  disarmRecovery(); // running now; nothing left to wait for
-  lastDormantReason = undefined;
-  void vscode.commands.executeCommand("setContext", "crTrack.noRepo", false);
-  status.update(orchestrator.state);
-  log.info(`Active on ${repo.name} (${repo.branch})`);
 
-  // Anything that failed to upload previously goes out now that we are back.
-  const endpoint = readEndpoint(repo.root);
-  if (endpoint) {
-    void flushQueue(repo.root, {
-      endpoint,
-      ...(process.env["CR_TRACK_INGEST_TOKEN"]
-        ? { token: process.env["CR_TRACK_INGEST_TOKEN"] }
-        : {}),
-    })
-      .then(({ sent, remaining }) => {
-        if (sent || remaining) log.info(`Report queue: sent ${sent}, ${remaining} remaining`);
+  void vscode.commands.executeCommand("setContext", "crTrack.active", true);
+
+  if (repo && gitFeatures) {
+    disarmRecovery(); // fully running; nothing left to wait for
+    lastDormantReason = undefined;
+    status.update(gitFeatures.orchestrator.state);
+    log.info(`Active on ${repo.name} (${repo.branch})`);
+
+    // Anything that failed to upload previously goes out now that we are back.
+    const endpoint = readEndpoint(repo.root);
+    if (endpoint) {
+      void flushQueue(repo.root, {
+        endpoint,
+        ...(process.env["CR_TRACK_INGEST_TOKEN"]
+          ? { token: process.env["CR_TRACK_INGEST_TOKEN"] }
+          : {}),
       })
-      .catch((err) => log.error("Queue flush failed", err));
+        .then(({ sent, remaining }) => {
+          if (sent || remaining) log.info(`Report queue: sent ${sent}, ${remaining} remaining`);
+        })
+        .catch((err) => log.error("Queue flush failed", err));
+    }
+  } else {
+    // Partly available: say which half works instead of reporting a dead end.
+    status.limited("no git repository — file review still works");
+    log.info("File review is available; staged review and the commit gate are not.");
+    armRecovery(context, status, cwd);
+    return;
   }
 
   // Review whatever is already staged, so the extension is useful immediately
   // rather than only after the next `git add`.
-  void orchestrator.review().catch((err) => log.error("Initial review threw", err));
+  void gitFeatures.orchestrator.review().catch((err) => log.error("Initial review threw", err));
+}
+
+/**
+ * Guard for the commands that genuinely need a repository. Returns the git
+ * bundle, or explains what is missing and offers the way out.
+ */
+async function requireGit(): Promise<NonNullable<Session["git"]> | undefined> {
+  if (session?.git) return session.git;
+  const choice = await vscode.window.showWarningMessage(
+    session
+      ? "CR-Track: this needs a git repository. Reviewing individual files still works."
+      : "CR-Track is inactive. See the log for why.",
+    ...(session ? ["Initialise a repository", "Review a file instead", "Show log"] : ["Show log"]),
+  );
+  if (choice === "Initialise a repository") {
+    await vscode.commands.executeCommand("crTrack.initRepository");
+  } else if (choice === "Review a file instead") {
+    await vscode.commands.executeCommand("crTrack.reviewFile");
+  } else if (choice === "Show log") {
+    log.show();
+  }
+  return undefined;
 }
 
 function registerCommands(context: vscode.ExtensionContext, status: StatusBar): void {
@@ -431,72 +603,114 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
   register("crTrack.reviewStaged", async () => {
-    if (!session) {
-      // Offer the fix rather than only the diagnosis — most causes clear on a
-      // recheck, and the user asking for a review is the moment to try.
-      await start(context, status);
-    }
-    if (!session) {
-      const choice = await vscode.window.showWarningMessage(
-        "CR-Track is inactive — it could not start on this folder.",
-        "Show log",
-      );
-      if (choice === "Show log") log.show();
-      return;
-    }
+    // Asking for a review is the moment to retry startup — most causes clear
+    // on a recheck.
+    if (!session?.git) await start(context, status);
+    const git = await requireGit();
+    if (!git) return;
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.SourceControl, title: "CR-Track: reviewing…" },
-      () => session!.orchestrator.review({ force: true }),
+      () => git.orchestrator.review({ force: true }),
     );
   });
 
-  register("crTrack.reviewAndCommit", async () => {
+  // ── file review: works with or without a repository ───────────────────
+  register("crTrack.reviewFile", async (uri?: vscode.Uri) => {
     if (!session) {
-      // Without the extension, the ordinary commit is still the right outcome.
+      await start(context, status);
+      if (!session) {
+        void vscode.window.showWarningMessage("CR-Track is inactive. See the log for why.");
+        log.show();
+        return;
+      }
+    }
+    const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+    if (!target || target.scheme !== "file") {
+      void vscode.window.showInformationMessage(
+        "CR-Track: open a file, or right-click one in the Explorer.",
+      );
+      return;
+    }
+    await session.reviewFiles([target.fsPath]);
+  });
+
+  register("crTrack.reviewFolder", async (uri?: vscode.Uri, selected?: vscode.Uri[]) => {
+    if (!session) {
+      await start(context, status);
+      if (!session) {
+        void vscode.window.showWarningMessage("CR-Track is inactive. See the log for why.");
+        log.show();
+        return;
+      }
+    }
+    // Multi-select in the Explorer hands over the full selection.
+    const roots = (selected?.length ? selected : uri ? [uri] : []).filter((u) => u.scheme === "file");
+    if (roots.length === 0) {
+      void vscode.window.showInformationMessage("CR-Track: right-click a file or folder to review it.");
+      return;
+    }
+    const paths = await expandPaths(roots);
+    if (paths.length === 0) {
+      void vscode.window.showInformationMessage("CR-Track: no reviewable source files in that selection.");
+      return;
+    }
+    await session.reviewFiles(paths);
+  });
+
+  register("crTrack.reviewAndCommit", async () => {
+    const git = session?.git;
+    if (!git) {
+      // Refusing to commit would be worse than not reviewing — but committing
+      // in silence lets someone believe a review happened when none did.
+      log.warn("Review & Commit ran with no repository-backed session; committing unreviewed");
+      void vscode.window.showWarningMessage(
+        "CR-Track could not review this commit — it is inactive here. Committing anyway.",
+        "Why?",
+      ).then((c) => c === "Why?" && vscode.commands.executeCommand("crTrack.diagnose"));
       await runGitCommit();
       return;
     }
 
     // Make sure we are judging the current staged set, not a stale one.
-    if (session.orchestrator.state.kind !== "done") {
+    if (git.orchestrator.state.kind !== "done") {
       await vscode.window.withProgress(
         { location: vscode.ProgressLocation.SourceControl, title: "CR-Track: reviewing…" },
-        () => session!.orchestrator.review(),
+        () => git.orchestrator.review(),
       );
     }
 
-    const outstanding = session.diagnostics.remaining();
-    const decision = await askBeforeCommit(outstanding, {
-      blockOnBlocking: session.settings().blockCommitOnBlocking,
+    // Captured before the awaits above: a recheck could replace `session`.
+    const active = session;
+    if (!active) return;
+
+    const decision = await askBeforeCommit(active.diagnostics.remaining(), {
+      blockOnBlocking: active.settings().blockCommitOnBlocking,
     });
     if (!decision.proceed) return;
 
     const committed = await runGitCommit();
-    if (committed) await session.report(decision.overrideReason);
+    if (committed) await active.report(decision.overrideReason);
   });
 
   register("crTrack.reviewWorkingTree", async () => {
-    if (!session) {
-      void vscode.window.showWarningMessage("CR-Track is inactive. See the log for why.");
-      log.show();
-      return;
-    }
+    const git = await requireGit();
+    if (!git) return;
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.SourceControl, title: "CR-Track: reviewing working tree…" },
-      () => session!.orchestrator.review({ force: true, scope: "all" }),
+      () => git.orchestrator.review({ force: true, scope: "all" }),
     );
-    if (session.orchestrator.state.kind === "idle") {
+    if (git.orchestrator.state.kind === "idle") {
       void vscode.window.showInformationMessage("CR-Track: no changes to review.");
     }
   });
 
   register("crTrack.cancelReview", () => {
-    session?.orchestrator.cancelInFlight();
-    if (session) status.update(session.orchestrator.state);
+    session?.git?.orchestrator.cancelInFlight();
+    if (session?.git) status.update(session.git.orchestrator.state);
   });
 
   register("crTrack.clearFindings", () => {
-    session?.orchestrator.reset();
+    session?.git?.orchestrator.reset();
     session?.diagnostics.clear();
     session?.tree.clear();
     session?.fixes.reset();
@@ -581,8 +795,12 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     log.info(`vscode        : ${vscode.version}`);
     log.info(`platform      : ${process.platform} ${process.arch}, node ${process.version}`);
 
-    setGitPath(vscode.workspace.getConfiguration("git").get<string>("path") || undefined);
-    log.info(`git binary    : ${gitPath()}`);
+    // Deliberately NOT setGitPath(): this command exists to explain a broken
+    // state, and resetting the discovered path would both misreport the cause
+    // and break every git call for the rest of the session.
+    const resolved = await locateGit(gitOverrideSetting());
+    log.info(`git binary    : ${gitPath()}${resolved ? ` (v${resolved.version})` : " — NOT USABLE"}`);
+    log.info(`git override  : ${JSON.stringify(gitOverrideSetting()) ?? "(none)"}`);
     if (folder) {
       const check = await checkRepo(folder.uri.fsPath);
       log.info(`git repo      : ${check.ok ? "yes" : `NO — ${check.reason}`}`);
@@ -630,6 +848,7 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     const active = Boolean(session);
     const pick = await vscode.window.showQuickPick(
       [
+        { label: "$(file-code) Review the current file", id: "crTrack.reviewFile" },
         { label: "$(search-fuzzy) Review staged changes", id: "crTrack.reviewStaged" },
         { label: "$(repo) Initialise a git repository here", id: "crTrack.initRepository" },
         { label: "$(git-compare) Review working tree", id: "crTrack.reviewWorkingTree" },
@@ -653,6 +872,63 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
   });
 
   register("crTrack.showOutput", () => log.show());
+}
+
+/** Source extensions worth reviewing when a folder is selected. */
+const REVIEWABLE = new Set([
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".go", ".rs", ".java",
+  ".kt", ".cs", ".rb", ".php", ".swift", ".c", ".h", ".cpp", ".hpp", ".sql",
+  ".html", ".css", ".scss", ".vue", ".svelte",
+]);
+
+const IGNORED_DIRS = new Set([
+  "node_modules", ".git", "dist", "build", "out", ".next", ".nuxt", ".venv",
+  "venv", "__pycache__", "vendor", "target", ".vercel", "coverage",
+]);
+
+/**
+ * Expand a selection into reviewable files.
+ *
+ * Bounded deliberately: a folder review that swept node_modules would be slow,
+ * expensive and useless. The cap is enforced again in the engine.
+ */
+async function expandPaths(roots: vscode.Uri[], limit = 40): Promise<string[]> {
+  const out: string[] = [];
+
+  const walk = async (uri: vscode.Uri, depth: number): Promise<void> => {
+    if (out.length >= limit || depth > 6) return;
+    let entries: [string, vscode.FileType][];
+    try {
+      entries = await vscode.workspace.fs.readDirectory(uri);
+    } catch {
+      return;
+    }
+    for (const [name, type] of entries) {
+      if (out.length >= limit) return;
+      if (name.startsWith(".") && type === vscode.FileType.Directory) continue;
+      if (IGNORED_DIRS.has(name)) continue;
+      const child = vscode.Uri.joinPath(uri, name);
+      if (type === vscode.FileType.Directory) {
+        await walk(child, depth + 1);
+      } else if (REVIEWABLE.has(name.slice(name.lastIndexOf(".")).toLowerCase())) {
+        out.push(child.fsPath);
+      }
+    }
+  };
+
+  for (const root of roots) {
+    if (out.length >= limit) break;
+    let stat: vscode.FileStat | undefined;
+    try {
+      stat = await vscode.workspace.fs.stat(root);
+    } catch {
+      continue;
+    }
+    if (stat.type === vscode.FileType.Directory) await walk(root, 0);
+    else out.push(root.fsPath);
+  }
+
+  return out;
 }
 
 export function deactivate(): void {

@@ -161,3 +161,19 @@ export function readProjectConventions(repoRoot: string): string[] {
 
 export const USER_PROMPT =
   "Review the unified diff provided on stdin and return findings per the schema.";
+
+/**
+ * Whole-file review, used when there is no diff to look at.
+ *
+ * The content still arrives as an all-additions diff so the rest of the
+ * pipeline is unchanged, but saying so matters: told it is reviewing a change
+ * set, the model reports things like "this entire file is new" and grades
+ * long-standing code as if it had just been written.
+ */
+export const USER_PROMPT_FILES =
+  "The content on stdin is one or more COMPLETE FILES, presented as an " +
+  "all-additions diff because that is the transport. This is not a change " +
+  "set: the code is existing code, not newly written. Review it as it stands " +
+  "and return findings per the schema. Do not report that files are new, and " +
+  "do not comment on the diff format itself. Line numbers in the `+` lines " +
+  "correspond to the real line numbers in each file.";

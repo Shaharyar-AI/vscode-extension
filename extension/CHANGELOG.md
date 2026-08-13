@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.2.0
+
+**CR-Track no longer needs a git repository to be useful.**
+
+- **Review any file or folder, repository or not.** Right-click in the Explorer,
+  right-click in the editor, or use the panel. This is the answer to a folder
+  that was never `git init`-ed: staged review and the commit gate still need a
+  repository, everything else no longer does.
+- The status bar distinguishes *files only* from *inactive*, because reporting a
+  partial capability as death is how a working tool gets written off.
+
+Fixes found by an internal audit, all of which could bite a colleague's machine
+before they bit ours:
+
+- **`git.path` set to an array crashed activation.** VS Code documents that
+  setting as string, null *or* array, and an array threw
+  `path.trim is not a function` straight out of activation — frozen status bar,
+  empty log.
+- **Diagnose broke the session it was diagnosing.** It reset the git path
+  discovery had found, then reported a healthy repository as missing and left
+  every later git call failing. The one command a confused user is told to run.
+- **A `git init` could be missed forever.** The recovery throttle discarded
+  triggers instead of deferring them, and `.git/HEAD` is created exactly once.
+- **Review & Commit committed silently when inactive**, letting you believe a
+  review had happened.
+
 ## 0.1.5
 
 - **Fixed a runaway recheck loop.** Recovery throttled only the window-focus

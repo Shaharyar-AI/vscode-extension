@@ -76,6 +76,53 @@ export class StatusBar implements vscode.Disposable {
     }
   }
 
+  /** A review is running that is not driven by the orchestrator's state. */
+  busy(what: string): void {
+    this.item.text = "$(sync~spin) Reviewing…";
+    this.item.tooltip = what;
+    this.item.backgroundColor = undefined;
+    this.item.command = "crTrack.menu";
+  }
+
+  /** Outcome of a file review, which has no orchestrator state behind it. */
+  fileReview(findings: { severity: string }[], label: string): void {
+    const blocking = findings.filter((f) => f.severity === "blocking").length;
+    this.item.command = "crTrack.focusView";
+    if (findings.length === 0) {
+      this.item.text = "$(pass-filled) CR-Track";
+      this.item.tooltip = `No findings in ${label}.`;
+      this.item.backgroundColor = undefined;
+      return;
+    }
+    this.item.text = `$(warning) CR-Track ${findings.length}`;
+    this.item.tooltip = `${findings.length} finding(s) in ${label}. Click to open the panel.`;
+    this.item.backgroundColor = blocking
+      ? new vscode.ThemeColor("statusBarItem.errorBackground")
+      : undefined;
+  }
+
+  failed(message: string): void {
+    this.item.text = "$(circle-slash) CR-Track";
+    this.item.tooltip = `Review failed: ${message}
+Click for options.`;
+    this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
+    this.item.command = "crTrack.menu";
+  }
+
+  /**
+   * Running, but without everything. Distinct from dormant: something works.
+   * Reporting a partial capability as "inactive" is how a usable tool gets
+   * written off as broken.
+   */
+  limited(reason: string): void {
+    this.item.text = "$(shield) CR-Track · files only";
+    this.item.tooltip =
+      `${reason}.
+Right-click a file or folder to review it, or click here for options.`;
+    this.item.backgroundColor = undefined;
+    this.item.command = "crTrack.menu";
+  }
+
   /**
    * Installed but not operating. Says so in the text rather than only on hover,
    * and still opens the menu — an inactive extension the user cannot act on is

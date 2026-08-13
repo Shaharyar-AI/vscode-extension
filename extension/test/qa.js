@@ -125,8 +125,12 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     const notRepo = path.join(TMP, "plain-folder");
     fs.mkdirSync(notRepo, { recursive: true });
     const { state, restore, ext } = await boot(notRepo, { expectReview: false });
-    check("non-git folder stays dormant", /inactive/i.test(state.statusTooltip), state.statusTooltip);
+    check("non-git folder reports limited capability, not death",
+      /file review/i.test(state.statusTooltip) || /inactive/i.test(state.statusTooltip),
+      state.statusTooltip);
     check("no diagnostics published", state.diagnostics.size === 0);
+    check("file review is offered where staged review cannot work",
+      state.commands.has("crTrack.reviewFile") && state.commands.has("crTrack.reviewFolder"));
     ext.deactivate(); restore();
   }
   {
@@ -159,7 +163,8 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     await ext.activate(makeContext(EXT_DIR));
     await sleep(800);
 
-    check("plain folder starts dormant", /inactive/i.test(state.statusTooltip), state.statusTooltip);
+    check("plain folder starts without git features",
+      /file review|inactive/i.test(state.statusTooltip), state.statusTooltip);
     const watching = state.fileWatchers.some((w) => /\.git\/HEAD/.test(w.pattern));
     check("watches for a repository appearing", watching,
       state.fileWatchers.map((w) => w.pattern).join(", ") || "no watchers armed");
@@ -323,7 +328,8 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     for (const id of ["crTrack.menu", "crTrack.focusView", "crTrack.diagnose", "crTrack.restart"]) {
       check(`${id} is available while inactive`, state.commands.has(id));
     }
-    check("status bar says inactive in its text", /inactive/i.test(state.statusText), state.statusText);
+    check("status bar names its reduced state in the text",
+      /inactive|files only/i.test(state.statusText), state.statusText);
     ext.deactivate(); restore();
   }
   {
@@ -414,6 +420,60 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     section("model-backed scenarios");
     skipped("review, fixes, commit gate, reporting", "--fast");
     return summarise();
+  }
+
+  // ── 3b. File review with no git at all ─────────────────────────────────
+  //
+  // The scenario that started all of this: a project folder that was never a
+  // repository. Previously the extension had nothing to offer there.
+  section("3b. File review without a repository");
+  {
+    const dir = path.join(TMP, "no-git-at-all");
+    fs.mkdirSync(path.join(dir, "src"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules\n");
+    fs.writeFileSync(
+      path.join(dir, "src", "auth.js"),
+      [
+        "const users = require('./users');",
+        "",
+        "function login(name, password) {",
+        "  const sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";",
+        "  const row = db.query(sql);",
+        "  return row[0].token === password;",
+        "}",
+        "",
+        "module.exports = { login };",
+      ].join("\n") + "\n",
+    );
+    // node_modules must not be swept up by a folder review.
+    fs.mkdirSync(path.join(dir, "node_modules", "junk"), { recursive: true });
+    fs.writeFileSync(path.join(dir, "node_modules", "junk", "index.js"), "module.exports = 1;\n");
+
+    const { state, restore, ext } = await boot(dir, { expectReview: false });
+    await sleep(1500);
+
+    check("no repository, but the extension is running",
+      state.commands.has("crTrack.reviewFile"), "", "reviewFile was never registered");
+
+    await run(state, "crTrack.reviewFile", { fsPath: path.join(dir, "src", "auth.js"), scheme: "file" });
+    // Whole-file review of a small file; allow generous time.
+    for (let i = 0; i < 120 && state.diagnostics.size === 0; i++) await sleep(1000);
+
+    const rows = await findings(state);
+    check("a file in a non-repository folder is reviewed", rows.length > 0,
+      `${rows.length} finding(s)`, "no findings came back");
+    check("findings are attached to the real file",
+      [...state.diagnostics.keys()].some((k) => /auth\.js$/.test(k)),
+      [...state.diagnostics.keys()].join(", "));
+    if (rows.length) {
+      const lines = rows.map((r) => r.node.finding.lineStart);
+      check("line numbers land inside the file", lines.every((n) => n >= 1 && n <= 10),
+        `lines ${lines.join(", ")}`, `out of range: ${lines.join(", ")}`);
+      check("nothing is reported as 'new file'",
+        !rows.some((r) => /\bnew file\b/i.test(r.node.finding.title)),
+        "", "the model treated the whole-file review as a change set");
+    }
+    ext.deactivate(); restore();
   }
 
   // ── 4. A real review ───────────────────────────────────────────────────

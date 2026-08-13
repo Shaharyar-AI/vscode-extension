@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews your staged changes with Claude before you commit, and reports the outcome.",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -150,6 +150,18 @@
         "title": "Initialize Repository (git init)",
         "category": "CR-Track",
         "icon": "$(repo)"
+      },
+      {
+        "command": "crTrack.reviewFile",
+        "title": "Review This File",
+        "category": "CR-Track",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "crTrack.reviewFolder",
+        "title": "Review Selected Files",
+        "category": "CR-Track",
+        "icon": "$(folder)"
       }
     ],
     "viewsContainers": {
@@ -175,7 +187,7 @@
       {
         "view": "crTrack.findings",
         "when": "crTrack.noRepo",
-        "contents": "This folder is not a git repository.\n\nCR-Track reviews changes between git commits, so it needs one. A `.gitignore` on its own is not enough.\n\n[Initialise a repository here](command:crTrack.initRepository)\n\n[Diagnose](command:crTrack.diagnose)"
+        "contents": "This folder is not a git repository.\n\nStaged review and the commit gate need one — but you can still review files directly.\n\n[Review the current file](command:crTrack.reviewFile)\n\n[Initialise a repository here](command:crTrack.initRepository)\n\n[Diagnose](command:crTrack.diagnose)"
       },
       {
         "view": "crTrack.findings",
@@ -202,6 +214,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "crTrack.reviewFile",
+          "when": "view == crTrack.findings",
+          "group": "navigation@0"
+        },
         {
           "command": "crTrack.reviewStaged",
           "when": "view == crTrack.findings",
@@ -279,6 +296,32 @@
         {
           "command": "crTrack.revealFinding",
           "when": "false"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "crTrack.reviewFolder",
+          "when": "explorerResourceIsFolder",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "crTrack.reviewFile",
+          "when": "!explorerResourceIsFolder && resourceScheme == file",
+          "group": "7_modification@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "crTrack.reviewFile",
+          "when": "resourceScheme == file",
+          "group": "1_modification@9"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "crTrack.reviewFile",
+          "when": "resourceScheme == file",
+          "group": "1_modification@9"
         }
       ]
     },
