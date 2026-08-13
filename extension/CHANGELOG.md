@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.3
+
+- **"Not a git repository" was reported for problems that were nothing of the
+  kind.** Any failure of `git rev-parse` produced that one message, so a window
+  that did not inherit git on its PATH, or a repository tripping Windows'
+  dubious-ownership check, was told its folder had no `.git`. The three cases
+  are now distinguished and git's own words are logged.
+- VS Code's `git.path` setting is honoured, so CR-Track finds git wherever
+  Source Control already found it.
+- Added **CR-Track: Diagnose**, which prints folder, git binary, repository
+  status, CLI version, guides, model and endpoint in one go.
+
 ## 0.1.2
 
 - **The extension no longer stays stuck once it goes dormant.** It checked for a

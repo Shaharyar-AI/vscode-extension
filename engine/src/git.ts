@@ -8,22 +8,86 @@ import { run, runOrThrow } from "./proc";
 import { languageFor } from "./languages";
 import type { ChangeType, DiffStats, FileChange, RepoContext, Scope } from "./types";
 
+/**
+ * Which git to run.
+ *
+ * `git` on PATH is the normal answer, but the extension host does not always
+ * inherit a PATH containing it — Windows machines where git arrived with
+ * GitHub Desktop are the common case. VS Code's own `git.path` setting is the
+ * override, which is why Source Control can work while a plain spawn fails.
+ */
+let GIT = "git";
+
+export function setGitPath(path: string | undefined): void {
+  GIT = path?.trim() || "git";
+}
+
+export function gitPath(): string {
+  return GIT;
+}
+
 async function git(cwd: string, args: string[]): Promise<string> {
-  return (await runOrThrow("git", args, { cwd, timeoutMs: 30_000 })).trim();
+  return (await runOrThrow(GIT, args, { cwd, timeoutMs: 30_000 })).trim();
 }
 
 /** Soft variant: returns "" instead of throwing. For best-effort metadata. */
 async function gitSoft(cwd: string, args: string[]): Promise<string> {
   try {
-    const r = await run("git", args, { cwd, timeoutMs: 30_000 });
+    const r = await run(GIT, args, { cwd, timeoutMs: 30_000 });
     return r.code === 0 ? r.stdout.trim() : "";
   } catch {
     return "";
   }
 }
 
+export type RepoCheck =
+  | { ok: true }
+  | { ok: false; reason: "git-missing" | "git-error" | "not-a-repo"; detail: string };
+
+/**
+ * Is this a usable git repository?
+ *
+ * Distinguishing the failures matters. "Not a git repository" is the right
+ * thing to tell someone whose folder genuinely has no `.git`, and actively
+ * misleading for someone whose git is missing from PATH, or who has tripped
+ * Windows' dubious-ownership check — all of which look identical if you only
+ * test the exit code.
+ */
+export async function checkRepo(cwd: string): Promise<RepoCheck> {
+  let r;
+  try {
+    r = await run(GIT, ["rev-parse", "--is-inside-work-tree"], { cwd, timeoutMs: 30_000 });
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return {
+        ok: false,
+        reason: "git-missing",
+        detail:
+          `\`${GIT}\` could not be run — git is not on the PATH this window inherited. ` +
+          `Set "git.path" in settings, or relaunch VS Code from a terminal where \`git --version\` works.`,
+      };
+    }
+    return { ok: false, reason: "git-error", detail: (err as Error).message };
+  }
+
+  if (r.code === 0 && r.stdout.trim() === "true") return { ok: true };
+
+  const stderr = (r.stderr || r.stdout).trim();
+  if (/not a git repository/i.test(stderr)) {
+    return { ok: false, reason: "not-a-repo", detail: stderr };
+  }
+  // Dubious ownership, a broken index, a permissions problem — report what git
+  // actually said instead of guessing.
+  return {
+    ok: false,
+    reason: "git-error",
+    detail: stderr || `\`git rev-parse\` exited ${r.code} with no output`,
+  };
+}
+
 export async function isRepo(cwd: string): Promise<boolean> {
-  return (await gitSoft(cwd, ["rev-parse", "--is-inside-work-tree"])) === "true";
+  return (await checkRepo(cwd)).ok;
 }
 
 /** The diff arguments for a given scope. Resolved once, used everywhere. */
@@ -99,7 +163,7 @@ export async function countUnstaged(repo: RepoContext): Promise<number> {
 
 /** The unified diff for the active scope. Empty string means nothing to review. */
 export async function collectDiff(repo: RepoContext, scope: Scope): Promise<string> {
-  return (await run("git", diffArgs(scope, repo.baseBranch), {
+  return (await run(GIT, diffArgs(scope, repo.baseBranch), {
     cwd: repo.root,
     timeoutMs: 60_000,
   })).stdout;

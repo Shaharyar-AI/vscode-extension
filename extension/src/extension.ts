@@ -17,7 +17,7 @@ import { checkStartup, clearStartupCache } from "./startup";
 import { StatusBar } from "./status";
 import { FindingsTree } from "./tree";
 import { IndexWatcher } from "./watcher";
-import { isRepo, readRepoContext } from "@engine/git";
+import { checkRepo, gitPath, readRepoContext, setGitPath } from "@engine/git";
 import { findReferencesDir } from "@engine/prompt";
 import type { Finding } from "@engine/types";
 import { buildReport, type FindingOutcome } from "@engine/report";
@@ -243,13 +243,29 @@ async function start(context: vscode.ExtensionContext, status: StatusBar): Promi
     return;
   }
 
+  // Honour VS Code's own git location before shelling out. A window that did
+  // not inherit git on PATH still has a working Source Control panel, so
+  // "not a git repository" would be flatly wrong there.
+  setGitPath(vscode.workspace.getConfiguration("git").get<string>("path") || undefined);
+
   const cwd = folder.uri.fsPath;
-  if (!(await isRepo(cwd))) {
-    log.info(
-      `${cwd} is not a git repository — staying dormant. ` +
-        `Watching for one to appear; run "CR-Track: Restart" after \`git init\` if it does not.`,
-    );
-    status.dormant("this folder is not a git repository");
+  const repoCheck = await checkRepo(cwd);
+  if (!repoCheck.ok) {
+    const summary =
+      repoCheck.reason === "git-missing"
+        ? "git could not be run"
+        : repoCheck.reason === "git-error"
+          ? "git reported a problem"
+          : "this folder is not a git repository";
+    log.warn(`${cwd}: ${summary}`);
+    log.info(`  git = ${gitPath()}`);
+    log.info(`  ${repoCheck.detail}`);
+    if (repoCheck.reason !== "not-a-repo") {
+      log.info(`  Fix the above, then run "CR-Track: Restart".`);
+    } else {
+      log.info(`  Watching for a repository to appear.`);
+    }
+    status.dormant(summary);
     armRecovery(context, status, cwd);
     return;
   }
@@ -479,6 +495,38 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
         .showWarningMessage("CR-Track is still inactive. The log says why.", "Show log")
         .then((c) => c === "Show log" && log.show());
     }
+  });
+
+  // One command that answers "why isn't it working" on someone else's machine.
+  register("crTrack.diagnose", async () => {
+    log.show();
+    log.info("──────── diagnostics ────────");
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    log.info(`folder        : ${folder?.uri.fsPath ?? "(none open)"}`);
+    log.info(`session       : ${session ? "ACTIVE" : "inactive"}`);
+    log.info(`extension     : ${context.extension?.packageJSON?.version ?? "?"}`);
+    log.info(`vscode        : ${vscode.version}`);
+    log.info(`platform      : ${process.platform} ${process.arch}, node ${process.version}`);
+
+    setGitPath(vscode.workspace.getConfiguration("git").get<string>("path") || undefined);
+    log.info(`git binary    : ${gitPath()}`);
+    if (folder) {
+      const check = await checkRepo(folder.uri.fsPath);
+      log.info(`git repo      : ${check.ok ? "yes" : `NO — ${check.reason}`}`);
+      if (!check.ok) log.info(`  ${check.detail}`);
+    }
+
+    const cfg = readSettings(folder?.uri.fsPath);
+    clearStartupCache();
+    const gate = await checkStartup(context, cfg.claudePath);
+    log.info(`claude cli    : ${gate.ready ? `${gate.version} at ${gate.claudePath}` : `NOT USABLE — ${gate.reason}`}`);
+
+    const guides = findReferencesDir(context.extensionUri.fsPath);
+    log.info(`guides        : ${guides ?? "NOT FOUND — reviews would be much weaker"}`);
+    log.info(`model/effort  : ${cfg.model} / ${cfg.effort}`);
+    log.info(`endpoint      : ${readEndpoint(folder?.uri.fsPath) ?? "(none — reports stay local)"}`);
+    log.info("─────────────────────────────");
+    log.info('If anything above is wrong, fix it and run "CR-Track: Restart".');
   });
 
   register("crTrack.showOutput", () => log.show());
