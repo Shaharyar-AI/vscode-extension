@@ -43,7 +43,13 @@ async function locateCached(override: string | undefined): Promise<CliStatus> {
     if (fresh) return cached.status;
   }
   const started = Date.now();
-  const status = await locateClaude(override);
+  const status = await locateClaude(override, {
+    onOverrideRejected: (path, reason) =>
+      log.warn(
+        `crTrack.claudePath points at "${path}" but it could not be used (${reason}). ` +
+          `Looking elsewhere — clear or correct the setting to silence this.`,
+      ),
+  });
   const took = Date.now() - started;
   if (took > 3_000) {
     log.info(`CLI discovery took ${(took / 1000).toFixed(1)}s — caching the result`);

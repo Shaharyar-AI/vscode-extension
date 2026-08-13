@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews your staged changes with Claude before you commit, and reports the outcome.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -162,6 +162,18 @@
         "title": "Review Selected Files",
         "category": "CR-Track",
         "icon": "$(folder)"
+      },
+      {
+        "command": "crTrack.checkSetup",
+        "title": "Check Setup",
+        "category": "CR-Track",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "crTrack.openWalkthrough",
+        "title": "Open Setup Guide",
+        "category": "CR-Track",
+        "icon": "$(book)"
       }
     ],
     "viewsContainers": {
@@ -407,7 +419,65 @@
           "description": "Absolute path to the git executable. Leave empty to use VS Code's git.path, then PATH, then the usual install locations."
         }
       }
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "crTrackSetup",
+        "title": "Set up CR-Track",
+        "description": "Two things to check, then your first review. Takes about a minute.",
+        "steps": [
+          {
+            "id": "cli",
+            "title": "Install and sign in to the Claude CLI",
+            "description": "CR-Track drives the Claude CLI to do the reviewing, so it has to exist on this machine.\n\n```\nnpm i -g @anthropic-ai/claude-code\nclaude\n```\n\n[Check now](command:crTrack.checkSetup)",
+            "media": {
+              "markdown": "media/step-cli.md",
+              "altText": "Installing the Claude CLI"
+            },
+            "completionEvents": [
+              "onContext:crTrack.cliReady"
+            ]
+          },
+          {
+            "id": "repo",
+            "title": "Open a git repository (optional)",
+            "description": "With a repository you get automatic review of staged changes and a check before commit. Without one, file review still works.\n\n[Check now](command:crTrack.checkSetup)",
+            "media": {
+              "markdown": "media/step-repo.md",
+              "altText": "Git repository"
+            },
+            "completionEvents": [
+              "onContext:crTrack.repoReady"
+            ]
+          },
+          {
+            "id": "first",
+            "title": "Run your first review",
+            "description": "Stage a change and wait a couple of seconds, or right-click any source file.\n\n[Review the current file](command:crTrack.reviewFile)",
+            "media": {
+              "markdown": "media/step-review.md",
+              "altText": "Running a review"
+            },
+            "completionEvents": [
+              "onCommand:crTrack.reviewFile",
+              "onCommand:crTrack.reviewStaged"
+            ]
+          },
+          {
+            "id": "stuck",
+            "title": "If anything looks wrong",
+            "description": "One command prints everything: which git and Claude CLI were found, whether this folder is a repository, and where the guides came from.\n\n[Diagnose](command:crTrack.diagnose)",
+            "media": {
+              "markdown": "media/step-review.md",
+              "altText": "Diagnosing"
+            },
+            "completionEvents": [
+              "onCommand:crTrack.diagnose"
+            ]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.js",

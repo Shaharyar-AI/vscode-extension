@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0
+
+**Setup now explains itself instead of failing quietly.**
+
+- A **setup walkthrough** opens by itself the first time the extension is
+  installed, with a live tick against each precondition — Claude CLI, then
+  optionally a git repository — and a button to re-check.
+- **Readiness is logged on every start**, so the first line of the log answers
+  "is this thing set up?" without anyone guessing.
+- A machine that is missing something gets **one** notification with the fix, on
+  first install only. A working install stays silent.
+- New commands: **Check Setup** and **Open Setup Guide**.
+- A `crTrack.claudePath` that cannot be used is now reported rather than
+  silently ignored. It still falls back to a working CLI — refusing to run
+  because of a stale setting would be worse — but the setting no longer appears
+  to do nothing.
+
 ## 0.2.0
 
 **CR-Track no longer needs a git repository to be useful.**

@@ -72,7 +72,15 @@ export function compareVersions(a: string, b: string): number {
  * Resolve the CLI. `override` comes from configuration (the extension will
  * surface this as a `crTrack.claudePath` setting).
  */
-export async function locateClaude(override?: string): Promise<CliStatus> {
+export interface LocateOptions {
+  /** Called when an explicitly configured path could not be used. */
+  onOverrideRejected?: (path: string, reason: string) => void;
+}
+
+export async function locateClaude(
+  override?: string,
+  options: LocateOptions = {},
+): Promise<CliStatus> {
   const tried: string[] = [];
 
   const candidates: string[] = [];
@@ -86,9 +94,20 @@ export async function locateClaude(override?: string): Promise<CliStatus> {
     let out: string;
     try {
       const r = await run(path, ["--version"], { timeoutMs: 15_000 });
-      if (r.code !== 0) continue;
+      if (r.code !== 0) {
+        // Falling through to another CLI is right — refusing to work because a
+        // stale setting points nowhere would be worse. Saying nothing is not:
+        // the setting would appear to have no effect at all.
+        if (path === override) {
+          options.onOverrideRejected?.(path, `exited ${r.code}`);
+        }
+        continue;
+      }
       out = r.stdout.trim();
-    } catch {
+    } catch (err) {
+      if (path === override) {
+        options.onOverrideRejected?.(path, (err as NodeJS.ErrnoException).code ?? "could not run it");
+      }
       continue;
     }
 

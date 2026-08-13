@@ -347,6 +347,67 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     ext.deactivate(); restore();
   }
 
+  // ── 1d. First-run setup ────────────────────────────────────────────────
+  //
+  // Every failure reported from another machine was an unmet precondition
+  // discovered too late. This asserts the extension states them up front.
+  section("1d. First-run setup");
+  {
+    const repo = makeRepo("setup-ready", { "a.ts": "export const a = 1;\n" });
+    const { state, restore, ext } = await boot(repo, { expectReview: false });
+    await sleep(4000);
+
+    const setupLine = state.logLines.find((l) => /Setup:/.test(l));
+    check("readiness is logged at startup", Boolean(setupLine),
+      (setupLine ?? "").trim().slice(0, 110), "no Setup: line in the log");
+    check("readiness names all three preconditions",
+      /folder open:/.test(setupLine ?? "") &&
+      /Claude CLI:/.test(setupLine ?? "") &&
+      /git repository:/.test(setupLine ?? ""),
+      "", setupLine ?? "(missing)");
+    check("a fully working install stays silent",
+      !state.messages.some((m) => m.kind === "warning"),
+      "", `warned anyway: ${JSON.stringify(state.messages.map((m) => m.message.slice(0, 60)))}`);
+    check("setup commands are available",
+      state.commands.has("crTrack.checkSetup") && state.commands.has("crTrack.openWalkthrough"));
+
+    state.contexts.clear();
+    await run(state, "crTrack.checkSetup");
+    await sleep(2500);
+    check("checkSetup sets the walkthrough's tick marks",
+      state.contexts.get("crTrack.cliReady") === true &&
+      state.contexts.get("crTrack.repoReady") === true,
+      `cli=${state.contexts.get("crTrack.cliReady")} repo=${state.contexts.get("crTrack.repoReady")}`);
+    ext.deactivate(); restore();
+  }
+  {
+    // The colleague's machine: no usable CLI. It must say so, not go quiet.
+    const repo = makeRepo("setup-no-cli", { "b.ts": "export const b = 1;\n" });
+    const { vscode, state } = makeStub({ repo });
+    vscode.workspace.getConfiguration = (section) => ({
+      get: (k, d) =>
+        section === "crTrack" && k === "claudePath"
+          ? path.join(TMP, "definitely-not-claude.exe")
+          : d,
+    });
+    const restore = install(vscode);
+    const ext = loadExtension(BUNDLE);
+    await ext.activate(makeContext(EXT_DIR));
+    await sleep(6000);
+
+    // A stale claudePath must not silently do nothing. It is the setting people
+    // reach for precisely when things are already going wrong, so a version of
+    // it that appears to have no effect is worse than no setting at all.
+    check("a configured claudePath that cannot be used is reported",
+      state.logLines.some((l) => /claudePath points at/i.test(l)),
+      "", `no warning logged:\n${state.logLines.slice(0, 6).join("\n")}`);
+    check("it still finds a working CLI rather than refusing to run",
+      state.logLines.some((l) => /Claude CLI \d/.test(l)),
+      "", "gave up instead of looking elsewhere");
+    check("the setup guide stays reachable", state.commands.has("crTrack.openWalkthrough"));
+    ext.deactivate(); restore();
+  }
+
   // ── 1c. Nothing staged ─────────────────────────────────────────────────
   section("1c. Nothing staged is explained, not silent");
   {

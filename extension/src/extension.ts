@@ -14,6 +14,7 @@ import { FixProvider } from "./fixes";
 import { initLog, log } from "./log";
 import { Orchestrator, type State } from "./orchestrator";
 import { checkStartup, clearStartupCache } from "./startup";
+import { checkReadiness, describe, greetIfNeeded, openWalkthrough } from "./setup";
 import { StatusBar } from "./status";
 import { FindingsTree } from "./tree";
 import { IndexWatcher } from "./watcher";
@@ -252,6 +253,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerCommands(context, status);
 
   await start(context, status);
+
+  // Tell the user at install time what is missing, rather than letting them
+  // discover it as "the extension does nothing". Runs after start() so a fully
+  // working install says nothing at all.
+  void (async () => {
+    try {
+      const readiness = await checkReadiness(context, readSettings(
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+      ));
+      log.info(`Setup: ${describe(readiness)}`);
+      await greetIfNeeded(
+        context,
+        readiness,
+        context.extension?.packageJSON?.version ?? "0.0.0",
+      );
+    } catch (err) {
+      log.error("Readiness check failed", err);
+    }
+  })();
 
   // Re-evaluate when the settings that decide whether we can run at all change.
   context.subscriptions.push(
@@ -854,6 +874,8 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
         { label: "$(git-compare) Review working tree", id: "crTrack.reviewWorkingTree" },
         { label: "$(list-tree) Open the Findings panel", id: "crTrack.focusView" },
         { label: "$(pulse) Diagnose", id: "crTrack.diagnose", description: "why isn't it working?" },
+        { label: "$(checklist) Check setup", id: "crTrack.checkSetup" },
+        { label: "$(book) Setup guide", id: "crTrack.openWalkthrough" },
         { label: "$(refresh) Restart", id: "crTrack.restart" },
         { label: "$(output) Show log", id: "crTrack.showOutput" },
         { label: "$(gear) Settings", id: "crTrack.openSettings" },
@@ -870,6 +892,28 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
   register("crTrack.openSettings", () => {
     void vscode.commands.executeCommand("workbench.action.openSettings", "crTrack");
   });
+
+  register("crTrack.checkSetup", async () => {
+    const readiness = await checkReadiness(
+      context,
+      readSettings(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath),
+    );
+    log.info(`Setup: ${describe(readiness)}`);
+    const summary = readiness.usable
+      ? readiness.repo
+        ? "CR-Track is fully set up."
+        : "CR-Track can review files. Staged review needs a git repository."
+      : `CR-Track is not ready — ${readiness.cli ? "no folder is open" : readiness.cliDetail}.`;
+    const choice = await vscode.window.showInformationMessage(
+      summary,
+      "Open setup guide",
+      "Show log",
+    );
+    if (choice === "Open setup guide") await openWalkthrough();
+    else if (choice === "Show log") log.show();
+  });
+
+  register("crTrack.openWalkthrough", () => openWalkthrough());
 
   register("crTrack.showOutput", () => log.show());
 }
