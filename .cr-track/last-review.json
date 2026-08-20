@@ -3,22 +3,22 @@
   "source": "claude-code-skill",
   "ruleset": "coderabbit-style@2.0",
   "review": {
-    "id": "6fd29113-6d46-40f3-a374-569d2955c827",
-    "triggeredAt": "2026-08-20T14:59:03.651Z",
-    "completedAt": "2026-08-20T15:00:20.762Z",
-    "durationMs": 76129,
+    "id": "17fe6e26-f362-4cdc-936d-611f2cee48a2",
+    "triggeredAt": "2026-08-20T15:50:07.369Z",
+    "completedAt": "2026-08-20T15:52:19.745Z",
+    "durationMs": 132016,
     "status": "completed",
     "mode": "committed",
     "model": "claude-opus-5",
     "effort": "medium",
     "secondPass": false,
     "commit": {
-      "sha": "8fd5907db6a98864920069dcccf13a16df2d827f",
-      "shortSha": "8fd5907",
-      "message": "Act on the review CR-Track gave its own commit",
+      "sha": "11d232b305ce108c0b1131f97f6f4c806a8ac3d7",
+      "shortSha": "11d232b",
+      "message": "Find the Claude CLI where people actually install it (0.4.1)",
       "authorName": "Shaharyar-AI",
       "authorEmail": "shaharyar_shabbir@ikonicsolution.com",
-      "authoredAt": "2026-08-20T18:56:36+05:00"
+      "authoredAt": "2026-08-20T20:50:05+05:00"
     }
   },
   "developer": {
@@ -31,7 +31,7 @@
     "remote": "https://github.com/ikonic-git-admin/claude-skills.git",
     "branch": "main",
     "baseBranch": "main",
-    "commitBefore": "8fd5907",
+    "commitBefore": "11d232b",
     "isDirty": true,
     "host": "github.com",
     "owner": "ikonic-git-admin",
@@ -41,62 +41,211 @@
     "primaryLanguage": "JavaScript"
   },
   "diffStats": {
-    "filesChanged": 5,
-    "linesAdded": 130,
-    "linesRemoved": 401,
+    "filesChanged": 11,
+    "linesAdded": 625,
+    "linesRemoved": 129,
     "files": [
       {
         "path": ".cr-track/last-review.json",
         "language": "JSON",
-        "linesAdded": 62,
-        "linesRemoved": 384,
+        "linesAdded": 34,
+        "linesRemoved": 114,
         "changeType": "modified"
       },
       {
-        "path": "dashboard/README.md",
+        "path": "dist-r2/doctor.sh",
+        "language": "Shell",
+        "linesAdded": 135,
+        "linesRemoved": 0,
+        "changeType": "added"
+      },
+      {
+        "path": "dist-r2/install.sh",
+        "language": "Shell",
+        "linesAdded": 139,
+        "linesRemoved": 0,
+        "changeType": "added"
+      },
+      {
+        "path": "dist-r2/publish-r2.js",
+        "language": "JavaScript",
+        "linesAdded": 148,
+        "linesRemoved": 0,
+        "changeType": "added"
+      },
+      {
+        "path": "dist-r2/version.txt",
+        "language": null,
+        "linesAdded": 1,
+        "linesRemoved": 0,
+        "changeType": "added"
+      },
+      {
+        "path": "engine/src/claude-cli.ts",
+        "language": "TypeScript",
+        "linesAdded": 104,
+        "linesRemoved": 5,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/CHANGELOG.md",
         "language": "Markdown",
-        "linesAdded": 16,
+        "linesAdded": 23,
         "linesRemoved": 0,
         "changeType": "modified"
       },
       {
-        "path": "dashboard/api/ingest.js",
-        "language": "JavaScript",
-        "linesAdded": 11,
-        "linesRemoved": 0,
-        "changeType": "modified"
-      },
-      {
-        "path": "dashboard/deploy.js",
-        "language": "JavaScript",
-        "linesAdded": 10,
+        "path": "extension/package.json",
+        "language": "JSON",
+        "linesAdded": 1,
         "linesRemoved": 1,
         "changeType": "modified"
       },
       {
-        "path": "engine/src/proc.ts",
+        "path": "extension/src/status.ts",
         "language": "TypeScript",
-        "linesAdded": 31,
-        "linesRemoved": 16,
+        "linesAdded": 22,
+        "linesRemoved": 3,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/test/live.js",
+        "language": "JavaScript",
+        "linesAdded": 2,
+        "linesRemoved": 1,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/test/qa.js",
+        "language": "JavaScript",
+        "linesAdded": 16,
+        "linesRemoved": 5,
         "changeType": "modified"
       }
     ]
   },
-  "findings": [],
+  "findings": [
+    {
+      "id": "f1",
+      "file": "dist-r2/doctor.sh",
+      "lineStart": 67,
+      "lineEnd": 67,
+      "severity": "important",
+      "category": "correctness",
+      "title": "nvm fallback in doctor.sh will miss the symlinked claude binary",
+      "description": "npm-installed global bins under `.nvm/versions/node/<v>/bin/` are symlinks into `lib/node_modules/...`, so `-type f` filters out exactly the case this branch exists to catch. `tail -1` also picks the last path in `find` order rather than the newest Node version, so even when it does match it can report an outdated CLI. The result is a doctor that says \"no claude binary found anywhere\" for the nvm users it was written for.",
+      "suggestion": "Consider accepting symlinks and sorting by version, e.g. `\\( -type f -o -type l \\)` piped through `sort -V`.",
+      "confidence": 0.75,
+      "hadPatch": true,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f2",
+      "file": "engine/src/claude-cli.ts",
+      "lineStart": 42,
+      "lineEnd": 47,
+      "severity": "important",
+      "category": "correctness",
+      "title": "Version-manager directories are sorted lexicographically, not by version",
+      "description": "The comment promises \"newest first\", but `entries.sort().reverse()` is a string sort: with `v9.11.2`, `v18.20.0`, `v20.11.0` under `.nvm/versions/node`, `v9.11.2` sorts last and therefore comes first after `.reverse()`. A stale `claude` shim left behind by an old Node version would be preferred over the current one — and since `locateClaude` returns the first candidate that answers `--version`, that stale CLI wins outright.",
+      "suggestion": "Consider a numeric-aware comparison so `v18` and `v20` sort above `v9`, e.g. `localeCompare(..., { numeric: true })` in descending order. Copying before sorting also avoids mutating the array returned by `readdirSync`.",
+      "confidence": 0.86,
+      "hadPatch": true,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f3",
+      "file": "engine/src/claude-cli.ts",
+      "lineStart": 179,
+      "lineEnd": 185,
+      "severity": "important",
+      "category": "performance",
+      "title": "Every candidate is spawned twice on the failure path",
+      "description": "`anyRunnable` probes candidates with `--version` (15s timeout each) purely to decide whether to consult the login shell, and then the loop at line 187 re-probes the very same paths. In the common bad case — several stale paths exist but none work — each is executed twice, and the candidate list just grew to include one entry per installed Node version. Combined with the 10s login-shell probe this can stall activation for a long time.",
+      "suggestion": "Consider having the probe return the working path (or the index it stopped at) and reusing it, so a candidate is never executed twice: e.g. hoist the `--version` probe into a helper that returns `{ path, stdout } | null` and feed its result to both the shell-fallback decision and the version parsing. Shorter per-candidate timeouts for the speculative pass would also help.",
+      "confidence": 0.72,
+      "hadPatch": false,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f4",
+      "file": "dist-r2/install.sh",
+      "lineStart": 77,
+      "lineEnd": 81,
+      "severity": "nit",
+      "category": "correctness",
+      "title": "An invalid CODE_BIN prints two contradictory errors",
+      "description": "`find_code` runs inside a command substitution, so its `die \"CODE_BIN is set to '…' but that is not runnable\"` only exits the subshell. The non-zero status then triggers the caller's `|| die`, and the user sees the precise message immediately followed by \"VS Code was not found\" plus advice to install the shell command — which is not their problem.",
+      "suggestion": "Consider having `find_code` `return 1` after printing the CODE_BIN-specific warning (or set a flag the caller checks), so only one diagnosis reaches the user.",
+      "confidence": 0.8,
+      "hadPatch": false,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f5",
+      "file": "engine/src/claude-cli.ts",
+      "lineStart": 23,
+      "lineEnd": 24,
+      "severity": "nit",
+      "category": "maintainability",
+      "title": "LINE_BREAK is an obfuscated spelling of /\\r?\\n/",
+      "description": "`new RegExp(String.fromCharCode(13) + \"?\" + String.fromCharCode(10))` builds the same regex the removed literal expressed directly, but a reader now has to decode two char codes to see it. If the intent was to dodge a lint rule or a build-time transform, that reason isn't recorded anywhere.",
+      "suggestion": "Consider `const LINE_BREAK = /\\r?\\n/;`, or a short comment naming the constraint that forced the indirect construction.",
+      "confidence": 0.7,
+      "hadPatch": false,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f6",
+      "file": "extension/src/status.ts",
+      "lineStart": 89,
+      "lineEnd": 90,
+      "severity": "nit",
+      "category": "correctness",
+      "title": "\"startup failed\" still collapses to the bare \"inactive\" this change removes",
+      "description": "`extension.ts:302` calls `dormant(\"startup failed — see the log\")`, which matches none of the branches and falls through to `\"inactive\"` — the exact status text the comment at line 63 says sends people round a useless disable/reload loop. Startup failure is arguably the state where naming the cause matters most.",
+      "suggestion": "Consider adding a branch for it before the fallback.",
+      "confidence": 0.68,
+      "hadPatch": true,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    }
+  ],
   "changes": [],
   "summary": {
-    "findingsTotal": 0,
+    "findingsTotal": 6,
     "bySeverity": {
       "blocking": 0,
-      "important": 0,
-      "nit": 0,
+      "important": 3,
+      "nit": 3,
       "suggestion": 0
     },
-    "byCategory": {},
+    "byCategory": {
+      "correctness": 4,
+      "performance": 1,
+      "maintainability": 1
+    },
     "applied": 0,
     "dismissed": 0,
-    "outstanding": 0,
-    "patchesOffered": 0,
+    "outstanding": 6,
+    "patchesOffered": 3,
     "reviewerTimeSavedMin": 0
   },
   "client": {

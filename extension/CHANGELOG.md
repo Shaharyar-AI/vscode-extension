@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.2
+
+**Watches every repository in the window, not just the first.**
+
+Reported with a screenshot that made it unarguable: the status bar read
+"CR-Track · not a git repo" while the Source Control panel beside it listed two
+repositories. CR-Track only ever looked at `workspaceFolders[0]`, so a workspace
+whose first folder is a plain parent directory — or a multi-root workspace whose
+first folder happens not to be a repo — went dormant with git working perfectly.
+
+- **Repositories are discovered from three sources**: every workspace folder,
+  VS Code's own Git extension (authoritative for anything it has already found,
+  including repositories nested inside a non-repo folder), and — only when those
+  find nothing — a one-level scan for child directories containing `.git`.
+- **One commit watcher per repository.** A commit in the second repository is
+  reviewed, which it previously was not.
+- **Reports are per repository.** Repository context is read fresh at review
+  time rather than reused from activation, each repository's own
+  `.cr-track.yaml` applies, and each has its own retry queue.
+- **"Review the Last Commit" targets the repository you are editing**, not
+  whichever sorted first, and says which one in the progress notification.
+- **Diagnose lists them all** — every workspace folder and whether it is a repo,
+  what the Git extension found, what was discovered, and what is being watched.
+
 ## 0.4.1
 
 **Fixes "CR-Track is inactive" on a machine where the Claude CLI plainly works.**

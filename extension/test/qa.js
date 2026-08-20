@@ -425,6 +425,50 @@ export async function transfer(from: string, to: string, amount: any) {
     restore();
   }
 
+  section("6b. Several repositories in one window");
+  {
+    // The layout that produced "not a git repo" beside a Source Control panel
+    // listing two of them: the workspace folder is a plain parent directory and
+    // the repositories are inside it.
+    const parent = path.join(TMP, "workspace-parent");
+    fs.mkdirSync(parent, { recursive: true });
+    for (const name of ["frontend", "backend"]) {
+      const dir = path.join(parent, name);
+      fs.mkdirSync(dir, { recursive: true });
+      git(dir, "init", "-q");
+      git(dir, "config", "user.name", "QA Bot");
+      git(dir, "config", "user.email", "qa@example.com");
+      git(dir, "config", "commit.gpgsign", "false");
+      fs.writeFileSync(path.join(dir, "README.md"), "# " + name);
+      git(dir, "add", "-A");
+      git(dir, "commit", "-qm", "init");
+    }
+
+    const { state, restore } = await boot(parent);
+    check("A parent folder of repositories still activates",
+      !isDormant(state), state.statusText,
+      `went dormant on a folder containing two repositories: "${state.statusText}"`);
+    check("...and reports how many it is watching",
+      /2 repositories/.test(state.statusTooltip), state.statusTooltip);
+    check("...and installs a watcher for each",
+      state.fileWatchers.filter((w) => /logs\/HEAD/.test(w.pattern)).length === 2,
+      `${state.fileWatchers.filter((w) => /logs\/HEAD/.test(w.pattern)).length} reflog watchers`);
+
+    if (FAST) {
+      skipped("A commit in the second repository is reviewed", "needs the model");
+    } else {
+      state.logLines.length = 0;
+      // Deliberately the *second* one — the bug was that only the first counted.
+      commit(path.join(parent, "backend"), "add transfer", { "src/payments.ts": BAD_SOURCE });
+      await fireCommitWatcher(state);
+      check("A commit in the second repository is reviewed",
+        /Reviewing [0-9a-f]{7}/.test(logText(state)),
+        "reviewed",
+        `only the first repository was watched: ${logText(state).slice(-300)}`);
+    }
+    restore();
+  }
+
   // ── 7. The report ──────────────────────────────────────────────────────
   section("7. The report reaches the dashboard");
   {

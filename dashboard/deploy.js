@@ -31,14 +31,27 @@ const SKIP = new Set(["node_modules", ".vercel", ".git", "deploy.js"]);
  */
 const isHidden = (name) => name.startsWith(".");
 
+/** Extensions safe to send as text. Everything else is treated as binary. */
+const TEXT = /[.](html|css|js|mjs|cjs|json|md|txt|sh|svg|xml|yml|yaml)$/i;
+
 function collect(dir, prefix = "") {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (SKIP.has(entry.name) || isHidden(entry.name)) continue;
     const abs = path.join(dir, entry.name);
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) out.push(...collect(abs, rel));
-    else out.push({ file: rel, data: fs.readFileSync(abs, "utf8"), encoding: "utf-8" });
+    if (entry.isDirectory()) {
+      out.push(...collect(abs, rel));
+      continue;
+    }
+    // Reading a binary file as utf-8 replaces every invalid byte sequence with
+    // U+FFFD, which corrupts it silently — the upload succeeds and the download
+    // is unusable. Anything not known to be text goes up as base64.
+    if (TEXT.test(entry.name)) {
+      out.push({ file: rel, data: fs.readFileSync(abs, "utf8"), encoding: "utf-8" });
+    } else {
+      out.push({ file: rel, data: fs.readFileSync(abs).toString("base64"), encoding: "base64" });
+    }
   }
   return out;
 }

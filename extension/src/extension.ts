@@ -10,6 +10,8 @@
  * way for the thing to be broken on someone else's machine.
  */
 
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import * as vscode from "vscode";
 import { readEndpoint, readSettings, type Settings } from "./config";
 import { CommitWatcher } from "./commit-watcher";
@@ -48,22 +50,29 @@ class Session implements vscode.Disposable {
   private reviewing = false;
 
   constructor(
-    readonly repo: RepoContext,
+    readonly repos: RepoContext[],
     readonly claudePath: string,
     readonly cliVersion: string | undefined,
     readonly extensionVersion: string,
     readonly referencesDir: string | null,
-    readonly settings: () => Settings,
+    readonly settings: (repoRoot: string) => Settings,
     readonly diagnostics: DiagnosticsView,
     readonly tree: FindingsTree,
     readonly status: StatusBar,
   ) {
     this.disposables.push(diagnostics, tree);
-    this.disposables.push(
-      new CommitWatcher(repo.root, (sha) => {
-        void this.reviewCommit(sha).catch((err) => log.error("Commit review failed", err));
-      }),
-    );
+    // One watcher per repository. A window commonly holds several — a frontend
+    // and a backend, or a parent folder of services — and watching only the
+    // first meant every commit in the others was silently ignored.
+    for (const repo of repos) {
+      this.disposables.push(
+        new CommitWatcher(repo.root, (sha) => {
+          void this.reviewCommit(repo.root, sha).catch((err) =>
+            log.error("Commit review failed", err),
+          );
+        }),
+      );
+    }
   }
 
   /**
@@ -73,7 +82,7 @@ class Session implements vscode.Disposable {
    * worst outcome available is a missing review — that must not escalate into
    * a broken editor.
    */
-  async reviewCommit(sha: string): Promise<void> {
+  async reviewCommit(repoRoot: string, sha: string): Promise<void> {
     if (this.reviewing) {
       log.info("A review is already running — skipping this one");
       return;
@@ -82,7 +91,7 @@ class Session implements vscode.Disposable {
     const triggeredAt = new Date();
 
     try {
-      const commit = await readCommit(this.repo.root, sha);
+      const commit = await readCommit(repoRoot, sha);
       if (!commit) {
         log.warn(`Could not read commit ${sha.slice(0, 8)}`);
         return;
@@ -94,7 +103,7 @@ class Session implements vscode.Disposable {
         return;
       }
 
-      const stats = await commitStats(this.repo.root, sha);
+      const stats = await commitStats(repoRoot, sha);
       const code = stats.files.filter((f) => isReviewableCode(f.path));
       if (code.length === 0) {
         log.info(`${commit.shortSha} touches no source files — skipping`);
@@ -103,7 +112,7 @@ class Session implements vscode.Disposable {
       }
 
       const diff = await commitDiff(
-        this.repo.root,
+        repoRoot,
         sha,
         code.map((f) => f.path),
       );
@@ -112,7 +121,7 @@ class Session implements vscode.Disposable {
         return;
       }
 
-      const cfg = this.settings();
+      const cfg = this.settings(repoRoot);
       log.info(
         `Reviewing ${commit.shortSha} (${commit.subject}) — ` +
           `${code.length} file(s), +${stats.linesAdded}/-${stats.linesRemoved}`,
@@ -121,7 +130,7 @@ class Session implements vscode.Disposable {
 
       const result = await runReview({
         claudePath: this.claudePath,
-        repoRoot: this.repo.root,
+        repoRoot,
         diff,
         changedPaths: code.map((f) => f.path),
         config: cfg,
@@ -135,8 +144,8 @@ class Session implements vscode.Disposable {
       }
 
       // Half one: show the developer what could be better.
-      this.diagnostics.show(result.findings);
-      this.tree.setFindings(result.findings);
+      this.diagnostics.show(result.findings, repoRoot);
+      this.tree.setFindings(result.findings, repoRoot);
       this.status.reviewed(result.findings.length, commit.shortSha);
       log.info(
         `${commit.shortSha}: ${result.findings.length} finding(s) in ` +
@@ -147,13 +156,14 @@ class Session implements vscode.Disposable {
       }
 
       // Half two: send the outcome to the dashboard.
-      await this.report(commit, stats, result.findings, triggeredAt, result.durationMs, cfg);
+      await this.report(repoRoot, commit, stats, result.findings, triggeredAt, result.durationMs, cfg);
     } finally {
       this.reviewing = false;
     }
   }
 
   private async report(
+    repoRoot: string,
     commit: CommitInfo,
     stats: DiffStats,
     findings: Finding[],
@@ -162,8 +172,11 @@ class Session implements vscode.Disposable {
     cfg: Settings,
   ): Promise<void> {
     try {
+      // Read fresh rather than reusing what activation saw: the branch, the
+      // dirty flag and even the remote can all have changed since.
+      const context = await readRepoContext(repoRoot);
       const { report, redactionHits } = buildReport({
-        repo: { ...this.repo, head: commit.sha, headShort: commit.shortSha },
+        repo: { ...context, head: commit.sha, headShort: commit.shortSha },
         stats,
         findings,
         annotations: [],
@@ -191,9 +204,9 @@ class Session implements vscode.Disposable {
 
       if (redactionHits.length) log.info(`Redacted: ${redactionHits.join(", ")}`);
 
-      const endpoint = readEndpoint(this.repo.root);
+      const endpoint = readEndpoint(repoRoot);
       const token = process.env["CR_TRACK_INGEST_TOKEN"];
-      const result = await deliver(this.repo.root, report, {
+      const result = await deliver(repoRoot, report, {
         ...(endpoint ? { endpoint } : {}),
         ...(token ? { token } : {}),
       });
@@ -292,6 +305,95 @@ function armRecovery(context: vscode.ExtensionContext, status: StatusBar, folder
   recovery = vscode.Disposable.from(...parts);
 }
 
+/**
+ * Every git repository this window can see.
+ *
+ * Three sources, because none alone is sufficient. Workspace folders cover the
+ * ordinary case. VS Code's own Git extension is authoritative for anything it
+ * has already found — including repositories nested inside a folder that is not
+ * one itself, which is exactly the layout that made CR-Track report "not a git
+ * repo" beside a Source Control panel listing two of them. A one-level scan
+ * catches a parent folder of checkouts when the Git extension is disabled.
+ */
+async function discoverRepos(): Promise<{ roots: string[]; blocked?: RepoCheckFailure }> {
+  const roots = new Set<string>();
+  let firstFailure: RepoCheckFailure | undefined;
+
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  for (const folder of folders) {
+    const check = await checkRepo(folder.uri.fsPath);
+    if (check.ok) {
+      const root = await repoRootOf(folder.uri.fsPath);
+      if (root) roots.add(root);
+    } else if (!firstFailure) {
+      firstFailure = { path: folder.uri.fsPath, reason: check.reason, detail: check.detail };
+    }
+  }
+
+  for (const root of gitExtensionRepos()) roots.add(root);
+
+  // Only worth scanning when nothing else found anything — it costs a stat per
+  // child directory, and a large parent folder would make that noticeable.
+  if (roots.size === 0) {
+    for (const folder of folders) {
+      for (const child of childRepos(folder.uri.fsPath)) {
+        const root = await repoRootOf(child);
+        if (root) roots.add(root);
+      }
+    }
+  }
+
+  const out = [...roots].sort();
+  return firstFailure && out.length === 0 ? { roots: out, blocked: firstFailure } : { roots: out };
+}
+
+interface RepoCheckFailure {
+  path: string;
+  reason: string;
+  detail: string;
+}
+
+/** Resolve any path inside a repository to its top level. */
+async function repoRootOf(cwd: string): Promise<string | null> {
+  try {
+    const ctx = await readRepoContext(cwd);
+    return ctx.root || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Repositories the built-in Git extension already knows about.
+ *
+ * Deliberately defensive: this reaches into another extension's API, and a
+ * shape change there must degrade to "found none" rather than break activation.
+ */
+function gitExtensionRepos(): string[] {
+  try {
+    const ext = vscode.extensions.getExtension("vscode.git");
+    const api = ext?.isActive ? ext.exports?.getAPI?.(1) : undefined;
+    const repos: unknown[] = api?.repositories ?? [];
+    return repos
+      .map((r) => (r as { rootUri?: { fsPath?: string } })?.rootUri?.fsPath)
+      .filter((p): p is string => typeof p === "string" && p.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/** Immediate subdirectories that contain a `.git`. */
+function childRepos(parent: string): string[] {
+  try {
+    return readdirSync(parent, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith("."))
+      .map((e) => join(parent, e.name))
+      .filter((dir) => existsSync(join(dir, ".git")));
+  } catch {
+    return [];
+  }
+}
+
 async function start(context: vscode.ExtensionContext, status: StatusBar): Promise<void> {
   if (starting) return;
   starting = true;
@@ -324,45 +426,67 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
   if (foundGit) log.info(`Git ${foundGit.version} at ${foundGit.path}`);
   else setGitPath(override);
 
-  let repoCheck = await checkRepo(cwd);
-  if (!repoCheck.ok && isDubiousOwnership(repoCheck.detail)) {
+  let found = await discoverRepos();
+
+  // Ownership refusal is worth one prompt: on a shared or copied checkout git
+  // simply refuses, and the message it gives is not one most people recognise.
+  if (found.roots.length === 0 && found.blocked && isDubiousOwnership(found.blocked.detail)) {
     const choice = await vscode.window.showWarningMessage(
-      `CR-Track: git will not open ${cwd} — it is owned by another user account.`,
+      `CR-Track: git will not open ${found.blocked.path} — it is owned by another user account.`,
       "Trust this folder",
     );
-    if (choice === "Trust this folder" && (await trustDirectory(cwd))) {
-      repoCheck = await checkRepo(cwd);
+    if (choice === "Trust this folder" && (await trustDirectory(found.blocked.path))) {
+      found = await discoverRepos();
     }
   }
 
-  if (!repoCheck.ok) {
+  if (found.roots.length === 0) {
     const summary =
-      repoCheck.reason === "not-a-repo" ? "no git repository here" : "git could not be used";
+      found.blocked && found.blocked.reason !== "not-a-repo"
+        ? "git could not be used"
+        : "no git repository here";
     // Log a reason once per distinct cause; repeating it on every recheck
     // buries everything else and reads like a fault in itself.
-    const fingerprint = `${cwd}|${repoCheck.reason}`;
+    const fingerprint = `${cwd}|${summary}`;
     if (lastDormant !== fingerprint) {
       lastDormant = fingerprint;
       log.warn(`${cwd}: ${summary}`);
       log.info(`  git = ${gitPath()}`);
-      log.info(`  ${repoCheck.detail}`);
+      if (found.blocked) log.info(`  ${found.blocked.detail}`);
+      log.info(`  searched ${(vscode.workspace.workspaceFolders ?? []).length} workspace folder(s)`);
     }
     status.dormant(summary);
     armRecovery(context, status, cwd);
     return;
   }
 
-  const repo = await readRepoContext(cwd);
-  const settings = (): Settings => readSettings(repo.root);
+  const repos: RepoContext[] = [];
+  for (const root of found.roots) {
+    try {
+      repos.push(await readRepoContext(root));
+    } catch (err) {
+      log.warn(`Skipping ${root}: ${(err as Error).message}`);
+    }
+  }
+  if (repos.length === 0) {
+    status.dormant("git could not be used");
+    armRecovery(context, status, cwd);
+    return;
+  }
 
-  if (!settings().enabled) {
+  // Configuration is per repository — a `.cr-track.yaml` belongs to its own
+  // project, not to whichever one happened to be listed first.
+  const settings = (repoRoot: string): Settings => readSettings(repoRoot);
+  const primary = repos[0]!;
+
+  if (!settings(primary.root).enabled) {
     log.info("Disabled via crTrack.enabled");
     status.dormant("disabled in settings");
     disarmRecovery();
     return;
   }
 
-  const gate = await checkStartup(context, settings().claudePath);
+  const gate = await checkStartup(context, settings(primary.root).claudePath);
   if (!gate.ready || !gate.claudePath) {
     status.dormant(gate.reason ?? "the Claude CLI is unavailable");
     armRecovery(context, status, cwd);
@@ -374,31 +498,39 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
   else log.warn("Guides not found — findings will be weaker than they should be");
 
   session = new Session(
-    repo,
+    repos,
     gate.claudePath,
     gate.version,
     context.extension?.packageJSON?.version ?? "0.0.0",
     referencesDir,
     settings,
-    new DiagnosticsView(repo.root),
-    new FindingsTree(repo.root),
+    new DiagnosticsView(),
+    new FindingsTree(),
     status,
   );
 
   disarmRecovery();
   lastDormant = undefined;
-  status.idle(`watching ${repo.name} for commits`);
-  log.info(`Active on ${repo.name} (${repo.branch}) — every new commit will be reviewed`);
+  const names = repos.map((r) => r.name).join(", ");
+  status.idle(
+    repos.length === 1
+      ? `watching ${primary.name} for commits`
+      : `watching ${repos.length} repositories for commits`,
+  );
+  log.info(`Active on ${names} — every new commit will be reviewed`);
+  for (const r of repos) log.info(`  ${r.name} (${r.branch}) — ${r.root}`);
 
-  const endpoint = readEndpoint(repo.root);
-  if (endpoint) {
-    const token = process.env["CR_TRACK_INGEST_TOKEN"];
-    void flushQueue(repo.root, { endpoint, ...(token ? { token } : {}) })
+  const token = process.env["CR_TRACK_INGEST_TOKEN"];
+  for (const r of repos) {
+    const endpoint = readEndpoint(r.root);
+    if (!endpoint) continue;
+    void flushQueue(r.root, { endpoint, ...(token ? { token } : {}) })
       .then(({ sent, remaining }) => {
         if (sent || remaining) log.info(`Report queue: sent ${sent}, ${remaining} remaining`);
       })
       .catch((err) => log.error("Queue flush failed", err));
-  } else {
+  }
+  if (!repos.some((r) => readEndpoint(r.root))) {
     log.info("No dashboard endpoint configured — reports stay in .cr-track/");
   }
 }
@@ -408,6 +540,17 @@ function gitOverrideSetting(): string | string[] | undefined {
   const own = vscode.workspace.getConfiguration("crTrack").get<string>("gitPath")?.trim();
   if (own) return own;
   return vscode.workspace.getConfiguration("git").get<string | string[] | null>("path") ?? undefined;
+}
+
+/** The open repository containing the file the developer is currently editing. */
+function repoForActiveEditor(repos: RepoContext[]): RepoContext | undefined {
+  const file = vscode.window.activeTextEditor?.document.uri.fsPath;
+  if (!file) return undefined;
+  const normalized = file.split("\\").join("/").toLowerCase();
+  // Longest root first, so a repository nested inside another still wins.
+  return [...repos]
+    .sort((a, b) => b.root.length - a.root.length)
+    .find((r) => normalized.startsWith(r.root.split("\\").join("/").toLowerCase()));
 }
 
 function registerCommands(context: vscode.ExtensionContext, status: StatusBar): void {
@@ -425,19 +568,25 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
       return;
     }
     const active = session;
+    // With several repositories open, the one the developer is looking at is
+    // the one they mean. Falling back to "the first" would review a different
+    // project's commit without saying so.
+    const target = repoForActiveEditor(active.repos) ?? active.repos[0]!;
     // Read HEAD now rather than trusting the value captured at activation —
     // by definition the developer has committed since then.
-    const sha = (await headSha(active.repo.root)) || active.repo.head;
+    const sha = (await headSha(target.root)) || target.head;
     if (!sha) {
-      void vscode.window.showInformationMessage("CR-Track: this repository has no commits yet.");
+      void vscode.window.showInformationMessage(
+        `CR-Track: ${target.name} has no commits yet.`,
+      );
       return;
     }
     await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: "CR-Track: reviewing the last commit",
+        title: `CR-Track: reviewing the last commit in ${target.name}`,
       },
-      () => active.reviewCommit(sha),
+      () => active.reviewCommit(target.root, sha),
     );
   });
 
@@ -462,10 +611,19 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     const resolved = await locateGit(gitOverrideSetting());
     log.info(`git        : ${gitPath()}${resolved ? ` (v${resolved.version})` : " — NOT USABLE"}`);
 
-    if (folder) {
-      const check = await checkRepo(folder.uri.fsPath);
-      log.info(`repository : ${check.ok ? "yes" : `NO — ${check.detail}`}`);
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    log.info(`folders    : ${folders.length}`);
+    for (const f of folders) {
+      const check = await checkRepo(f.uri.fsPath);
+      log.info(`  ${check.ok ? "repo" : "----"}  ${f.uri.fsPath}${check.ok ? "" : ` (${check.detail})`}`);
     }
+    const fromGitExt = gitExtensionRepos();
+    log.info(`git ext    : ${fromGitExt.length ? fromGitExt.join(", ") : "(none / not active)"}`);
+    const discovered = await discoverRepos();
+    log.info(
+      `repositories: ${discovered.roots.length ? discovered.roots.join(", ") : "NONE FOUND"}`,
+    );
+    log.info(`watching   : ${session ? session.repos.map((r) => r.name).join(", ") : "(inactive)"}`);
     const cfg = readSettings(folder?.uri.fsPath);
     const gate = await checkStartup(context, cfg.claudePath);
     log.info(
@@ -482,7 +640,8 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     const finding = node?.kind === "finding" ? node.finding : undefined;
     if (!finding || !session) return;
     try {
-      const uri = vscode.Uri.joinPath(vscode.Uri.file(session.repo.root), finding.file);
+      const root = session.tree.currentRepoRoot() || session.repos[0]?.root || "";
+      const uri = vscode.Uri.joinPath(vscode.Uri.file(root), finding.file);
       const doc = await vscode.workspace.openTextDocument(uri);
       const editor = await vscode.window.showTextDocument(doc);
       const line = Math.max(0, Math.min(doc.lineCount - 1, (finding.lineStart || 1) - 1));

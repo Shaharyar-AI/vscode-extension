@@ -26,9 +26,17 @@ export class DiagnosticsView implements vscode.Disposable {
   /** Findings by document URI, so the quick-fix provider can look them up. */
   private readonly byUri = new Map<string, Finding[]>();
 
-  constructor(private readonly repoRoot: string) {}
+  /**
+   * The repository the current findings came from.
+   *
+   * Set per call rather than per instance: a window can hold several
+   * repositories, and a finding's path is only meaningful against the one whose
+   * commit produced it.
+   */
+  private repoRoot = "";
 
-  show(findings: Finding[]): void {
+  show(findings: Finding[], repoRoot: string): void {
+    this.repoRoot = repoRoot;
     this.collection.clear();
     this.byUri.clear();
 

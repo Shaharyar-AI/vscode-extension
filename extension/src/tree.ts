@@ -56,7 +56,10 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
   private readonly view: vscode.TreeView<Node>;
   private readonly disposables: vscode.Disposable[] = [];
 
-  constructor(private readonly repoRoot: string) {
+  /** Set per review — one window can hold several repositories. */
+  private repoRoot = "";
+
+  constructor() {
     this.view = vscode.window.createTreeView("crTrack.findings", {
       treeDataProvider: this,
       showCollapseAll: true,
@@ -64,7 +67,8 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
     this.disposables.push(this.view, this.changed);
   }
 
-  setFindings(findings: Finding[]): void {
+  setFindings(findings: Finding[], repoRoot = this.repoRoot): void {
+    this.repoRoot = repoRoot;
     this.findings = findings;
     this.root = buildTree(findings);
     this.changed.fire(undefined);
@@ -76,6 +80,11 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
 
   clear(): void {
     this.setFindings([]);
+  }
+
+  /** Which repository the findings on screen belong to. */
+  currentRepoRoot(): string {
+    return this.repoRoot;
   }
 
   getChildren(node?: Node): Node[] {
