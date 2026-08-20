@@ -77,6 +77,13 @@ function commit(dir, message, files) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Dormant states are the only ones that put a reason after a separator, so this
+ * is the marker rather than the word "inactive" — which the status bar
+ * deliberately replaces with the specific cause.
+ */
+const isDormant = (state) => / · /.test(state.statusText);
+
 /** Activate the extension against a repo. Does NOT wait for a review. */
 async function boot(repo, { answers } = {}) {
   const { vscode, state } = makeStub({ repo, answers });
@@ -175,7 +182,11 @@ export async function transfer(from: string, to: string, amount: any) {
     fs.mkdirSync(plain, { recursive: true });
     const { state, restore } = await boot(plain);
     check("A folder with no repository goes dormant",
-      /inactive/i.test(state.statusText), state.statusText);
+      isDormant(state), state.statusText);
+    check("...and the status bar says why, without needing a hover",
+      /not a git repo/i.test(state.statusText), state.statusText,
+      `status text was "${state.statusText}" — a bare "inactive" sends people ` +
+      "round a disable/reload loop that cannot help");
     check("...and the reason names the repository, not something vague",
       /no git repository/i.test(state.statusTooltip + logText(state)),
       "", `tooltip was "${state.statusTooltip}"`);
@@ -190,7 +201,7 @@ export async function transfer(from: string, to: string, amount: any) {
   {
     const { state, restore } = await boot(undefined);
     check("No folder open goes dormant rather than throwing",
-      /inactive/i.test(state.statusText), state.statusText);
+      isDormant(state) && /no folder/i.test(state.statusText), state.statusText);
     restore();
   }
 
@@ -233,7 +244,7 @@ export async function transfer(from: string, to: string, amount: any) {
     try {
       const { state, restore } = await boot(repo);
       check("Git missing from PATH is still found, or reported precisely",
-        !/inactive/i.test(state.statusText) || /git could not be used|no git repository/i.test(state.statusTooltip),
+        !isDormant(state) || /git could not be used|no git repository/i.test(state.statusTooltip),
         state.statusText,
         `status "${state.statusText}" tooltip "${state.statusTooltip}"`);
       check("...and the log names the git binary it tried",
@@ -262,7 +273,7 @@ export async function transfer(from: string, to: string, amount: any) {
     const repo = makeRepo("commit-trigger");
     const { state, restore } = await boot(repo);
     check("Activates on a real repository",
-      !/inactive/i.test(state.statusText), state.statusText);
+      !isDormant(state), state.statusText);
     check("...and says it is watching for commits",
       /watching/i.test(state.statusTooltip), state.statusTooltip);
     check("...and installs a reflog watcher",
@@ -396,7 +407,7 @@ export async function transfer(from: string, to: string, amount: any) {
 
     const { state, restore } = await boot(repo);
     check("An empty repository still activates",
-      !/inactive/i.test(state.statusText), state.statusText);
+      !isDormant(state), state.statusText);
     check("...and says the first commit will be reviewed",
       /No commits yet/i.test(logText(state)), "primed as empty");
 

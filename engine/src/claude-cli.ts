@@ -6,7 +6,7 @@
  * how loudly to complain; the commit must never be blocked by it.
  */
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { run } from "./proc";
@@ -20,25 +20,64 @@ export type CliStatus =
 
 const isWindows = process.platform === "win32";
 
+/** Splits command output into lines on either line ending. */
+const LINE_BREAK = new RegExp(String.fromCharCode(13) + "?" + String.fromCharCode(10));
+
+/** Every directory a `claude` shim could live in, per Node version manager. */
+function versionManagerBins(home: string): string[] {
+  const roots = [
+    join(home, ".nvm", "versions", "node"),
+    join(home, ".local", "share", "fnm", "node-versions"),
+    join(home, "Library", "Application Support", "fnm", "node-versions"),
+    join(home, ".volta", "tools", "image", "node"),
+  ];
+  const out: string[] = [];
+  for (const root of roots) {
+    let entries: string[];
+    try {
+      entries = readdirSync(root);
+    } catch {
+      continue;
+    }
+    // Newest first, so an upgraded CLI wins over one left behind by an older
+    // Node version that happens to still be installed.
+    for (const entry of entries.sort().reverse()) {
+      out.push(join(root, entry, "bin", "claude"));
+      out.push(join(root, entry, "installation", "bin", "claude"));
+    }
+  }
+  return out;
+}
+
 function candidatePaths(): string[] {
   const home = homedir();
   const out: string[] = [];
   if (isWindows) {
-    const appdata = process.env.APPDATA ?? join(home, "AppData", "Roaming");
-    const local = process.env.LOCALAPPDATA ?? join(home, "AppData", "Local");
+    const appdata = process.env["APPDATA"] ?? join(home, "AppData", "Roaming");
+    const local = process.env["LOCALAPPDATA"] ?? join(home, "AppData", "Local");
     out.push(
       join(appdata, "npm", "claude.cmd"),
       join(local, "Programs", "claude", "claude.exe"),
       join(home, ".claude", "local", "claude.exe"),
       join(home, ".local", "bin", "claude.exe"),
+      join(local, "Volta", "bin", "claude.exe"),
     );
   } else {
     out.push(
       "/usr/local/bin/claude",
       "/opt/homebrew/bin/claude",
+      "/usr/bin/claude",
       join(home, ".local", "bin", "claude"),
       join(home, ".claude", "local", "claude"),
       join(home, ".bun", "bin", "claude"),
+      join(home, ".volta", "bin", "claude"),
+      join(home, ".asdf", "shims", "claude"),
+      join(home, ".yarn", "bin", "claude"),
+      join(home, ".npm-global", "bin", "claude"),
+      join(home, "Library", "pnpm", "claude"),
+      join(home, ".local", "share", "pnpm", "claude"),
+      join(home, "npm", "bin", "claude"),
+      ...versionManagerBins(home),
     );
   }
   return out;
@@ -50,11 +89,46 @@ async function fromPath(): Promise<string | null> {
   try {
     const r = await run(finder, ["claude"], { timeoutMs: 5_000 });
     if (r.code !== 0) return null;
-    const first = r.stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)[0];
+    const first = r.stdout.split(LINE_BREAK).map((l) => l.trim()).filter(Boolean)[0];
     return first ?? null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Ask the user's login shell where `claude` is.
+ *
+ * This exists for one specific, very common failure. VS Code launched from the
+ * Dock or a desktop icon inherits a bare PATH — roughly `/usr/bin:/bin` — not
+ * the one built by `.zshrc` or `.bashrc`. Anyone whose Node came from nvm, fnm
+ * or asdf then has a `claude` that works perfectly in their terminal and is
+ * invisible to the extension, which is indistinguishable from the extension
+ * being broken.
+ *
+ * `-l` sources login files and `-i` sources interactive ones; nvm is normally
+ * set up in the latter, so both are tried. Startup files can print banners, so
+ * only a line that is an absolute path to a file that exists is believed.
+ */
+async function fromLoginShell(): Promise<string | null> {
+  if (isWindows) return null;
+  const shell = process.env["SHELL"];
+  if (!shell || !existsSync(shell)) return null;
+
+  for (const flag of ["-lic", "-lc"]) {
+    try {
+      const r = await run(shell, [flag, "command -v claude"], { timeoutMs: 10_000 });
+      const hit = r.stdout
+        .split(LINE_BREAK)
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith("/") && existsSync(l))
+        .pop();
+      if (hit) return hit;
+    } catch {
+      // A shell that refuses to start this way is not an error worth reporting.
+    }
+  }
+  return null;
 }
 
 /** Numeric-segment comparison. Returns <0, 0, >0. */
@@ -77,6 +151,19 @@ export interface LocateOptions {
   onOverrideRejected?: (path: string, reason: string) => void;
 }
 
+/** Does at least one candidate answer `--version` successfully? */
+async function anyRunnable(paths: string[]): Promise<boolean> {
+  for (const path of paths) {
+    try {
+      const r = await run(path, ["--version"], { timeoutMs: 15_000 });
+      if (r.code === 0) return true;
+    } catch {
+      /* try the next one */
+    }
+  }
+  return false;
+}
+
 export async function locateClaude(
   override?: string,
   options: LocateOptions = {},
@@ -88,6 +175,14 @@ export async function locateClaude(
   const onPath = await fromPath();
   if (onPath) candidates.push(onPath);
   candidates.push(...candidatePaths().filter(existsSync));
+
+  // Last, because it is the slowest: starting a login shell can take seconds.
+  // It is also the only thing that finds an nvm/fnm install when the editor was
+  // launched from the Dock, so it must run before we conclude "not found".
+  if (candidates.length === 0 || !(await anyRunnable(candidates))) {
+    const fromShell = await fromLoginShell();
+    if (fromShell && !candidates.includes(fromShell)) candidates.push(fromShell);
+  }
 
   for (const path of candidates) {
     tried.push(path);
@@ -141,7 +236,11 @@ export async function locateClaude(
 export function installHint(status: Extract<CliStatus, { ok: false }>): string {
   switch (status.reason) {
     case "not-found":
-      return "Claude CLI not found. Install it, then reload:  npm i -g @anthropic-ai/claude-code";
+      return (
+        "the Claude CLI could not be found. If `claude` works in your terminal, " +
+        "run `which claude` there and put that path in the crTrack.claudePath setting. " +
+        "Otherwise:  npm i -g @anthropic-ai/claude-code"
+      );
     case "too-old":
       return `Claude CLI is out of date (${status.detail}).`;
     case "unusable":

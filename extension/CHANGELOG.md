@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.1
+
+**Fixes "CR-Track is inactive" on a machine where the Claude CLI plainly works.**
+
+Reported by a teammate on macOS, and the discovery logic was at fault. VS Code
+launched from the Dock inherits a bare `PATH` — roughly `/usr/bin:/bin` — not the
+one your shell builds from `.zshrc`. Anyone whose Node came from nvm, fnm, asdf
+or Volta therefore had a `claude` that ran perfectly in a terminal and was
+invisible to the extension. Restarting and toggling the setting could not
+possibly help, which is exactly what makes it maddening.
+
+- **Version-manager installs are now searched**: nvm, fnm and Volta node
+  directories (newest version first), plus asdf shims, pnpm, yarn, Bun, Volta,
+  `~/.npm-global` and `/usr/bin`.
+- **The login shell is asked directly** when nothing else works — `$SHELL -lic
+  'command -v claude'` — which is the only way to see a PATH the editor never
+  inherited. Tried last, because starting a login shell is slow.
+- **The status bar now names the cause**: "CR-Track · no Claude CLI",
+  "· not a git repo", "· no folder open" — instead of a bare "inactive" whose
+  reason was hidden in a tooltip nobody hovers.
+- **The message says what to do**: if `claude` works in your terminal, run
+  `which claude` and put that path in `crTrack.claudePath`.
+
 ## 0.4.0
 
 **CR-Track now does one thing: it reviews your commits.**

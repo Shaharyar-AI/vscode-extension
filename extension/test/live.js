@@ -74,7 +74,8 @@ export async function transfer(from: string, to: string, amount: any) {
   const ext = loadExtension(BUNDLE);
   await ext.activate(makeContext(EXT_DIR));
   await sleep(1500);
-  check("The extension is active", !/inactive/i.test(state.statusText), state.statusText);
+  // Dormant states put the reason after a separator; an active one never does.
+  check("The extension is active", !/ · /.test(state.statusText), state.statusText);
   check("...and is watching for commits",
     state.fileWatchers.some((w) => /logs\/HEAD/.test(w.pattern)), "reflog watcher installed");
 

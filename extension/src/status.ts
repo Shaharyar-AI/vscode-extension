@@ -60,13 +60,32 @@ export class StatusBar implements vscode.Disposable {
    * the worst of both worlds.
    */
   dormant(reason: string): void {
-    this.item.text = "$(shield) CR-Track · inactive";
-    this.item.tooltip = `CR-Track is inactive — ${reason}.\nClick to run Diagnose.`;
-    this.item.backgroundColor = undefined;
+    // The reason goes in the *text*, not just the tooltip. "inactive" on its own
+    // sends people round a disable/reload/enable loop that cannot possibly help,
+    // because none of it addresses a missing CLI or a missing repository.
+    this.item.text = "$(shield) CR-Track · " + shortReason(reason);
+    this.item.tooltip = "CR-Track is inactive — " + reason + ".\nClick to run Diagnose.";
+    this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
     this.item.command = "crTrack.diagnose";
   }
 
   dispose(): void {
     this.item.dispose();
   }
+}
+
+/**
+ * Compress a reason into something that fits a status bar without lying.
+ * Anything unrecognised falls back to "inactive" rather than being cut off
+ * mid-sentence.
+ */
+function shortReason(reason: string): string {
+  const r = reason.toLowerCase();
+  if (r.includes("claude")) return "no Claude CLI";
+  if (r.includes("no git repository")) return "not a git repo";
+  if (r.includes("git")) return "git unavailable";
+  if (r.includes("no folder")) return "no folder open";
+  if (r.includes("disabled")) return "disabled";
+  if (r.includes("starting")) return "starting";
+  return "inactive";
 }
