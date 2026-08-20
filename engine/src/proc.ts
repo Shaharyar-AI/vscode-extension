@@ -40,22 +40,8 @@ const isWindows = process.platform === "win32";
  */
 const live = new Set<import("node:child_process").ChildProcess>();
 
-/** Kill a process and everything it started. */
-function killTree(child: import("node:child_process").ChildProcess): void {
-  const pid = child.pid;
-  if (pid === undefined) return;
-  if (isWindows) {
-    try {
-      // /T takes the children with it, /F does not ask nicely.
-      spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
-        stdio: "ignore",
-        windowsHide: true,
-      }).unref();
-      return;
-    } catch {
-      // fall through to the portable path
-    }
-  }
+/** Signal-based kill. All we can do where `taskkill` is not available. */
+function killBySignal(child: import("node:child_process").ChildProcess): void {
   try {
     child.kill("SIGTERM");
     setTimeout(() => {
@@ -68,6 +54,35 @@ function killTree(child: import("node:child_process").ChildProcess): void {
   } catch {
     /* already gone */
   }
+}
+
+/** Kill a process and everything it started. */
+function killTree(child: import("node:child_process").ChildProcess): void {
+  const pid = child.pid;
+  if (pid === undefined) return;
+
+  if (isWindows) {
+    let killer;
+    try {
+      // /T takes the children with it, /F does not ask nicely.
+      killer = spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+    } catch {
+      killBySignal(child);
+      return;
+    }
+    // `spawn` reports a failure to launch asynchronously, as an `error` event —
+    // a try/catch cannot see it. With no listener attached Node re-throws it as
+    // an unhandled `error`, which would take the extension host down during the
+    // one operation whose whole job is to clean up quietly.
+    killer.on("error", () => killBySignal(child));
+    killer.unref();
+    return;
+  }
+
+  killBySignal(child);
 }
 
 /**

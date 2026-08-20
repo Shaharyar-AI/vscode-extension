@@ -44,6 +44,22 @@ Vercel at build time, so nothing needs to be installed locally.
 Storage is a Vercel Blob store (`cr-track-data`) connected to the project, which
 injects `BLOB_READ_WRITE_TOKEN` at runtime.
 
+## Access
+
+The ingest endpoint is open by default, which is what makes a fresh install
+report with no setup. It also means anyone with the URL can post to it, and that
+`/api/reviews` exposes developer emails and commit messages to anyone who asks.
+For a stand-in dashboard on an unguessable URL that is a deliberate trade; it is
+not one to carry into the real one.
+
+To close it, set `CR_TRACK_INGEST_TOKEN` on the Vercel project and the same
+value in each developer's environment — the extension already sends it as a
+bearer token. Reads stay public either way.
+
+Known limits, none of which matter at this scale but all of which would in a
+real dashboard: the index lists at most 1000 reviews, each page load fetches
+every index record it shows, and stored reports are public blobs.
+
 > Deployment protection must stay off for this project. With Vercel
 > Authentication on, every report gets a `401` and silently queues on the
 > developer's machine.

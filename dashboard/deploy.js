@@ -22,10 +22,19 @@ if (!TOKEN) {
 const ROOT = __dirname;
 const SKIP = new Set(["node_modules", ".vercel", ".git", "deploy.js"]);
 
+/**
+ * Never upload a dotfile.
+ *
+ * Everything under this directory is served publicly once deployed, and a
+ * `.env` sitting here would be published along with it. Naming files to skip
+ * one at a time is how that eventually gets missed.
+ */
+const isHidden = (name) => name.startsWith(".");
+
 function collect(dir, prefix = "") {
   const out = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (SKIP.has(entry.name)) continue;
+    if (SKIP.has(entry.name) || isHidden(entry.name)) continue;
     const abs = path.join(dir, entry.name);
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) out.push(...collect(abs, rel));

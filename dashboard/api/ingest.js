@@ -45,6 +45,17 @@ module.exports = async (req, res) => {
 
   if (req.method !== "POST") return bad(res, 405, "Use POST");
 
+  // Optional shared secret. Unset, the endpoint is open — which is the right
+  // default for a stand-in dashboard nobody has a token for yet. Set
+  // CR_TRACK_INGEST_TOKEN on the project and every sender must present it; the
+  // extension already sends the matching header when the same variable is set
+  // in its environment.
+  const expected = process.env.CR_TRACK_INGEST_TOKEN;
+  if (expected) {
+    const presented = String(req.headers["authorization"] || "").replace(/^Bearer\s+/i, "");
+    if (presented !== expected) return bad(res, 401, "Bad or missing ingest token");
+  }
+
   let payload;
   try {
     payload = await readBody(req);
