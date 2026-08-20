@@ -3,22 +3,22 @@
   "source": "claude-code-skill",
   "ruleset": "coderabbit-style@2.0",
   "review": {
-    "id": "3d678119-c01e-4093-9efc-960f0a6e26f6",
-    "triggeredAt": "2026-08-20T16:17:01.332Z",
-    "completedAt": "2026-08-20T16:18:52.648Z",
-    "durationMs": 110895,
+    "id": "7db7641d-810f-46a9-afbf-7fc93ede0619",
+    "triggeredAt": "2026-08-20T16:48:43.937Z",
+    "completedAt": "2026-08-20T16:51:12.277Z",
+    "durationMs": 147842,
     "status": "completed",
     "mode": "committed",
     "model": "claude-opus-5",
     "effort": "medium",
     "secondPass": false,
     "commit": {
-      "sha": "07f3950b12078df28a0c08475b5f7e45352ce2f4",
-      "shortSha": "07f3950",
-      "message": "Watch every repository in the window, not just the first (0.4.2)",
+      "sha": "a5e6efdfa81f8f2572501a92d460bb4d3682522d",
+      "shortSha": "a5e6efd",
+      "message": "Find Claude where the editor extension puts it (0.4.3)",
       "authorName": "Shaharyar-AI",
       "authorEmail": "shaharyar_shabbir@ikonicsolution.com",
-      "authoredAt": "2026-08-20T21:16:59+05:00"
+      "authoredAt": "2026-08-20T21:48:42+05:00"
     }
   },
   "developer": {
@@ -31,7 +31,7 @@
     "remote": "https://github.com/ikonic-git-admin/claude-skills.git",
     "branch": "main",
     "baseBranch": "main",
-    "commitBefore": "07f3950",
+    "commitBefore": "a5e6efd",
     "isDirty": true,
     "host": "github.com",
     "owner": "ikonic-git-admin",
@@ -41,44 +41,23 @@
     "primaryLanguage": "TypeScript"
   },
   "diffStats": {
-    "filesChanged": 12,
-    "linesAdded": 774,
-    "linesRemoved": 93,
+    "filesChanged": 9,
+    "linesAdded": 308,
+    "linesRemoved": 129,
     "files": [
       {
         "path": ".cr-track/last-review.json",
         "language": "JSON",
-        "linesAdded": 182,
-        "linesRemoved": 33,
+        "linesAdded": 72,
+        "linesRemoved": 118,
         "changeType": "modified"
-      },
-      {
-        "path": "dashboard/deploy.js",
-        "language": "JavaScript",
-        "linesAdded": 15,
-        "linesRemoved": 2,
-        "changeType": "modified"
-      },
-      {
-        "path": "dashboard/public/doctor.sh",
-        "language": "Shell",
-        "linesAdded": 135,
-        "linesRemoved": 0,
-        "changeType": "added"
-      },
-      {
-        "path": "dashboard/public/install.sh",
-        "language": "Shell",
-        "linesAdded": 139,
-        "linesRemoved": 0,
-        "changeType": "added"
       },
       {
         "path": "dashboard/public/version.txt",
         "language": null,
         "linesAdded": 1,
-        "linesRemoved": 0,
-        "changeType": "added"
+        "linesRemoved": 1,
+        "changeType": "modified"
       },
       {
         "path": "dist-r2/version.txt",
@@ -88,44 +67,44 @@
         "changeType": "modified"
       },
       {
+        "path": "engine/src/claude-cli.ts",
+        "language": "TypeScript",
+        "linesAdded": 83,
+        "linesRemoved": 6,
+        "changeType": "modified"
+      },
+      {
         "path": "extension/CHANGELOG.md",
         "language": "Markdown",
-        "linesAdded": 24,
+        "linesAdded": 29,
         "linesRemoved": 0,
         "changeType": "modified"
       },
       {
         "path": "extension/package.json",
         "language": "JSON",
-        "linesAdded": 1,
+        "linesAdded": 12,
         "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/src/diagnostics.ts",
-        "language": "TypeScript",
-        "linesAdded": 11,
-        "linesRemoved": 3,
         "changeType": "modified"
       },
       {
         "path": "extension/src/extension.ts",
         "language": "TypeScript",
-        "linesAdded": 210,
-        "linesRemoved": 51,
+        "linesAdded": 26,
+        "linesRemoved": 0,
         "changeType": "modified"
       },
       {
-        "path": "extension/src/tree.ts",
+        "path": "extension/src/startup.ts",
         "language": "TypeScript",
-        "linesAdded": 11,
+        "linesAdded": 18,
         "linesRemoved": 2,
         "changeType": "modified"
       },
       {
         "path": "extension/test/qa.js",
         "language": "JavaScript",
-        "linesAdded": 44,
+        "linesAdded": 66,
         "linesRemoved": 0,
         "changeType": "modified"
       }
@@ -134,16 +113,16 @@
   "findings": [
     {
       "id": "f1",
-      "file": "extension/src/extension.ts",
-      "lineStart": 86,
-      "lineEnd": 90,
+      "file": "engine/src/claude-cli.ts",
+      "lineStart": 103,
+      "lineEnd": 106,
       "severity": "important",
       "category": "correctness",
-      "title": "Single `reviewing` flag now silently drops commits from sibling repositories",
-      "description": "`reviewing` is one boolean for the whole Session, but there is now one watcher per repository. A commit in the backend while the frontend's review is still running (these take tens of seconds to minutes) is dropped entirely — no queue, no retry — and the log line does not say which repository was skipped. With a single watcher this only lost a rapid second commit in the same repo; with N watchers it is a routine outcome of working across two projects.",
-      "suggestion": "Consider tracking in-flight state per repository (e.g. a `Set<string>` of roots being reviewed) so repositories do not block one another, or queueing the skipped sha for after the current run. At minimum, including the repo name and sha in the skip message would make the loss visible.",
-      "confidence": 0.8,
-      "hadPatch": false,
+      "title": "Lexicographic sort picks an older extension version as \"newest\"",
+      "description": "`entries.sort().reverse()` compares version suffixes as strings, so `anthropic.claude-code-1.9.0` sorts above `anthropic.claude-code-1.10.0`. On a machine with both left behind, the stale 1.9.0 binary is probed first and wins — the opposite of what the comment above promises, and the version-mismatch case this function was added to avoid.",
+      "suggestion": "Consider a numeric-aware comparison (`localeCompare` with `{ numeric: true }`) so 1.10.0 outranks 1.9.0. The same flaw exists in `versionManagerBins` above, which may be worth fixing in the same pass.",
+      "confidence": 0.88,
+      "hadPatch": true,
       "status": "proposed",
       "accepted": false,
       "dismissReason": null,
@@ -151,15 +130,15 @@
     },
     {
       "id": "f2",
-      "file": "extension/src/extension.ts",
-      "lineStart": 477,
-      "lineEnd": 489,
+      "file": "engine/src/claude-cli.ts",
+      "lineStart": 254,
+      "lineEnd": 263,
       "severity": "important",
-      "category": "correctness",
-      "title": "Per-repository settings only vary the YAML half; VS Code settings stay unscoped",
-      "description": "The comment states configuration is per repository, but `readSettings` calls `vscode.workspace.getConfiguration(\"crTrack\")` with no resource scope (config.ts:61) — only the `.cr-track.yaml` merge depends on `repoRoot`. In a multi-root window, folder-level overrides of `claudePath`, `model`, `effort`, `minSeverity`, and `enabled` therefore resolve identically for every repo. Related: the `enabled` gate and the CLI-path gate are evaluated against `primary` alone, so a folder that has disabled CR-Track is still watched and reviewed.",
-      "suggestion": "Consider passing a resource to `getConfiguration(\"crTrack\", vscode.Uri.file(repoRoot))` so folder-level settings apply, and filtering `repos` by `settings(r.root).enabled` rather than gating on the first repository only.",
-      "confidence": 0.65,
+      "category": "performance",
+      "title": "Quadrupled worst-case discovery time: every candidate is probed twice at 60s each",
+      "description": "`anyRunnable` probes each candidate, then the main loop probes the same candidates again — results from the first pass are discarded. Raising the per-probe budget from 15s to 60s takes the pathological case (several existing-but-hanging candidates, e.g. a stalled antivirus scan) from 2×N×15s to 2×N×60s, and `checkStartup` is awaited during activation, so that time is blocked startup. Widening the candidate list with `editorExtensionBins` raises N on exactly the machines the change targets.",
+      "suggestion": "Consider having `anyRunnable` return the successful path (or record per-candidate results) so the main loop can reuse them rather than re-spawning, and/or capping total discovery with an overall deadline so no combination of candidates can stall activation for minutes.",
+      "confidence": 0.7,
       "hadPatch": false,
       "status": "proposed",
       "accepted": false,
@@ -169,15 +148,66 @@
     {
       "id": "f3",
       "file": "extension/src/extension.ts",
-      "lineStart": 546,
-      "lineEnd": 554,
+      "lineStart": 603,
+      "lineEnd": 604,
       "severity": "important",
       "category": "correctness",
-      "title": "Active-editor repo match uses a prefix test with no path-boundary check",
-      "description": "`normalized.startsWith(root)` matches sibling directories that merely share a prefix: a file in `/work/app-legacy` resolves to the repository at `/work/app`. The longest-root-first sort does not help when the wrong repo has the longer root. `crTrack.reviewLastCommit` would then read HEAD from — and report a review against — a different project.",
-      "suggestion": "Consider requiring a separator boundary (or exact equality) when matching, and trimming any trailing slash on the root first.",
+      "title": "retryDetection can report a stale result when a start is already in flight",
+      "description": "`start()` returns immediately when the module-level `starting` guard is set (line 398), so if a recovery recheck or config-change restart is mid-flight, `await start(...)` does no work and the command then reports on whatever `session` happened to be from before. A user who just cleared the cache is told \"still inactive\" (or \"active on …\") based on the previous run, which is the exact ambiguity this command exists to remove.",
+      "suggestion": "Consider having `start` expose whether it actually ran (e.g. return a boolean, or await the in-flight promise), and in the command either wait for the running attempt or tell the user detection is already running.",
+      "confidence": 0.7,
+      "hadPatch": false,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f4",
+      "file": "engine/src/claude-cli.ts",
+      "lineStart": 120,
+      "lineEnd": 122,
+      "severity": "nit",
+      "category": "docs",
+      "title": "Comment says \"ahead of everything else\" but PATH still wins",
+      "description": "`locateClaude` pushes the override and the `fromPath()` hit into `candidates` before appending `candidatePaths()`, so the editor-bundled binary is only ahead of the other filesystem locations, not ahead of a `claude` on PATH. The comment's rationale (avoiding a version mismatch with what the editor runs) reads as if the ordering guaranteed something it does not.",
+      "suggestion": "Consider narrowing the comment to \"ahead of the other install locations\", or — if matching the editor's copy really is the priority — moving `editorExtensionBins` ahead of the `fromPath()` result in `locateClaude`.",
       "confidence": 0.75,
-      "hadPatch": true,
+      "hadPatch": false,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f5",
+      "file": "extension/src/startup.ts",
+      "lineStart": 34,
+      "lineEnd": 39,
+      "severity": "nit",
+      "category": "docs",
+      "title": "Module doc still claims a success is cached for the session",
+      "description": "The block comment on the `cached` declaration says \"A success is cached for the session\", which `SUCCESS_TTL_MS` now contradicts. Next reader has two adjacent comments disagreeing about the cache's lifetime.",
+      "suggestion": "Consider updating that sentence to mention the 10-minute expiry, or folding it into the new `SUCCESS_TTL_MS` docstring so there is one statement of the policy.",
+      "confidence": 0.85,
+      "hadPatch": false,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f6",
+      "file": "extension/test/qa.js",
+      "lineStart": 302,
+      "lineEnd": 305,
+      "severity": "nit",
+      "category": "testing",
+      "title": "Test fails confusingly instead of skipping when git isn't on PATH",
+      "description": "If no PATH entry matches `/git/i` with a git binary in it, `gitDir` is `undefined` and `process.env.PATH` becomes the empty string. `boot` then can't run git at all, the repo discovery goes dormant, and both checks fail with messages about the Claude CLI — pointing at the wrong subsystem. The `/git/i` heuristic also misses installs in directories not named \"git\" (e.g. `/usr/bin`).",
+      "suggestion": "Consider calling `skipped(...)` when `gitDir` is undefined, mirroring the existing `!real` branch, so an unfindable git is reported as a skip rather than a discovery failure. The stub `restore()` on line 316 could also move into the `finally` so a thrown check doesn't leak the stub.",
+      "confidence": 0.65,
+      "hadPatch": false,
       "status": "proposed",
       "accepted": false,
       "dismissReason": null,
@@ -186,19 +216,22 @@
   ],
   "changes": [],
   "summary": {
-    "findingsTotal": 3,
+    "findingsTotal": 6,
     "bySeverity": {
       "blocking": 0,
       "important": 3,
-      "nit": 0,
+      "nit": 3,
       "suggestion": 0
     },
     "byCategory": {
-      "correctness": 3
+      "correctness": 2,
+      "performance": 1,
+      "docs": 2,
+      "testing": 1
     },
     "applied": 0,
     "dismissed": 0,
-    "outstanding": 3,
+    "outstanding": 6,
     "patchesOffered": 1,
     "reviewerTimeSavedMin": 0
   },

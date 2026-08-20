@@ -46,11 +46,22 @@ is a one-time cleanup.
 
 ### 3. Install
 
-```bash
-code --install-extension cr-track-0.4.0.vsix
+**Windows (PowerShell):**
+
+```powershell
+irm https://cr-track-dashboard.vercel.app/install.ps1 | iex
 ```
 
-Or: Extensions panel → `···` menu → **Install from VSIX…**
+**macOS / Linux:**
+
+```bash
+curl -fsSL https://cr-track-dashboard.vercel.app/install.sh | bash
+```
+
+Use the one that matches the platform. On Windows `bash` is WSL's bash, so the
+curl form fails on any machine without a WSL distro.
+
+Re-running either command is also how you update.
 
 Then **Ctrl+Shift+P → Developer: Reload Window**.
 
@@ -127,9 +138,10 @@ is safe on disk and will be sent on the next activation.
 
 Rename your Claude CLI temporarily, reload the window.
 
-**Expect:** the status bar reads **inactive** with an explanatory tooltip and
-**one** notification. **Committing still works normally.** Put the CLI back
-afterwards; the extension picks it up when the window regains focus.
+**Expect:** the status bar names the cause — **CR-Track · no Claude CLI** — in
+amber, with one notification. **Committing still works normally.** Put the CLI
+back, then run **Ctrl+Shift+P → CR-Track: Re-detect Claude CLI and
+repositories** rather than waiting.
 
 ### G · Uninstall
 
@@ -166,7 +178,7 @@ Stated up front so they are not surprises.
 - **Only the most recent commit is reviewed.** Committing twice in quick
   succession while a review is running skips the second one; the log says so.
 - **Findings are advisory.** Nothing is blocked and nothing is auto-fixed.
-- **UI is thinly proven.** Logic and data flow are covered by 39 automated
+- **UI is thinly proven.** Logic and data flow are covered by 61 automated
   checks plus a live end-to-end against the real dashboard, but icon rendering,
   squiggle painting and menu placement have only been seen on one machine.
 

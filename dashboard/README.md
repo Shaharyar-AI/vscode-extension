@@ -1,14 +1,47 @@
 # CR-Track dashboard
 
 A stand-in dashboard so review data can be seen while the real one is built.
+It also serves the extension itself, so a team can install without the
+Marketplace.
 
 **Live:** https://cr-track-dashboard.vercel.app
 **Ingest:** `POST https://cr-track-dashboard.vercel.app/api/ingest`
 
-The extension ships with that ingest URL as the default `crTrack.endpoint`, so a
-fresh install reports here with no configuration. A repository's
-`.cr-track.yaml` `endpoint:` overrides it, which is how a team points at their
-own dashboard later.
+## Installing the extension
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://cr-track-dashboard.vercel.app/install.ps1 | iex
+```
+
+**macOS / Linux (bash or zsh):**
+
+```bash
+curl -fsSL https://cr-track-dashboard.vercel.app/install.sh | bash
+```
+
+Use the right one for the platform. On Windows `bash` resolves to WSL's bash, so
+the curl form fails with "Windows Subsystem for Linux has no installed
+distributions" on any machine without a WSL distro — which is most of them.
+
+When someone reports it as not working, the same split applies:
+
+```powershell
+irm https://cr-track-dashboard.vercel.app/doctor.ps1 | iex     # Windows
+```
+```bash
+curl -fsSL https://cr-track-dashboard.vercel.app/doctor.sh | bash   # macOS/Linux
+```
+
+Both installers are idempotent: they compare `version.txt` against what is
+installed, and do nothing if it already matches. Re-running is how people
+update. Set `CR_TRACK_FORCE=1` to reinstall regardless.
+
+## Publishing a new version
+
+Copy the built `.vsix` to `public/cr-track-latest.vsix`, write the version into
+`public/version.txt`, and deploy. The install URL never changes.
 
 ## What it does
 
