@@ -84,6 +84,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  */
 const isDormant = (state) => / · /.test(state.statusText);
 
+/** A real Claude binary on this machine, to plant in a fake profile. */
+function findRealClaude() {
+  const roots = [path.join(os.homedir(), ".vscode", "extensions")];
+  const exe = process.platform === "win32" ? "claude.exe" : "claude";
+  for (const root of roots) {
+    let entries = [];
+    try { entries = fs.readdirSync(root); } catch { continue; }
+    for (const e of entries.filter((d) => d.startsWith("anthropic.claude-code")).sort().reverse()) {
+      const p = path.join(root, e, "resources", "native-binary", exe);
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  for (const p of [path.join(os.homedir(), ".local", "bin", exe), "/usr/local/bin/claude"]) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 /** Activate the extension against a repo. Does NOT wait for a review. */
 async function boot(repo, { answers } = {}) {
   const { vscode, state } = makeStub({ repo, answers });
@@ -253,6 +271,54 @@ export async function transfer(from: string, to: string, amount: any) {
       restore();
     } finally {
       process.env.PATH = realPath;
+    }
+  }
+
+  section("3b. Claude only inside the editor extension");
+  {
+    // The machine that produced "no Claude CLI" while the developer had a
+    // working Claude terminal: Claude Code was installed as an *editor
+    // extension*, so the binary lives in the extension directory and there is
+    // no `claude` on PATH at all.
+    const home = path.join(TMP, "editor-only-home");
+    const planted = path.join(
+      home, ".vscode", "extensions", "anthropic.claude-code-9.9.9-test",
+      "resources", "native-binary",
+    );
+    fs.mkdirSync(planted, { recursive: true });
+
+    const exe = process.platform === "win32" ? "claude.exe" : "claude";
+    const real = findRealClaude();
+    if (!real) {
+      skipped("A Claude bundled in the editor extension is found", "no CLI on this machine");
+    } else {
+      const target = path.join(planted, exe);
+      // Hard link where possible — the binary is large and copying it per run
+      // is a real cost on a full disk.
+      try { fs.linkSync(real, target); } catch { fs.copyFileSync(real, target); }
+
+      const repo = makeRepo("editor-only");
+      const saved = { PATH: process.env.PATH, HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+      const gitDir = (saved.PATH || "")
+        .split(path.delimiter)
+        .find((p) => /git/i.test(p) && (fs.existsSync(path.join(p, "git.exe")) || fs.existsSync(path.join(p, "git"))));
+      process.env.PATH = [gitDir].filter(Boolean).join(path.delimiter);
+      process.env.HOME = home;
+      process.env.USERPROFILE = home;
+      try {
+        const { state, restore } = await boot(repo);
+        check("A Claude bundled in the editor extension is found",
+          /Claude CLI [0-9.]+ at .*claude-code/.test(logText(state)),
+          "found in the extension directory",
+          `resolved to: ${logText(state).match(/Claude CLI.*/)?.[0] ?? "nothing"}`);
+        check("...so the extension activates rather than reporting no CLI",
+          !isDormant(state), state.statusText);
+        restore();
+      } finally {
+        process.env.PATH = saved.PATH;
+        process.env.HOME = saved.HOME;
+        process.env.USERPROFILE = saved.USERPROFILE;
+      }
     }
   }
 

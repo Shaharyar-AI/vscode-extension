@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -57,6 +57,12 @@
         "title": "Show Log",
         "category": "CR-Track",
         "icon": "$(output)"
+      },
+      {
+        "command": "crTrack.retryDetection",
+        "title": "Re-detect Claude CLI and repositories",
+        "category": "CR-Track",
+        "icon": "$(refresh)"
       },
       {
         "command": "crTrack.diagnose",
@@ -116,6 +122,11 @@
           "command": "crTrack.diagnose",
           "when": "view == crTrack.findings",
           "group": "overflow@3"
+        },
+        {
+          "command": "crTrack.retryDetection",
+          "when": "view == crTrack.findings",
+          "group": "overflow@0"
         }
       ],
       "commandPalette": [

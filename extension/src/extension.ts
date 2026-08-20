@@ -592,6 +592,32 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
 
   register("crTrack.showOutput", () => log.show());
 
+  register("crTrack.retryDetection", async () => {
+    // Everything cached is thrown away, not just the CLI result: someone
+    // running this has already concluded the extension is wrong about their
+    // machine, and a half-cleared cache would leave them still right.
+    clearStartupCache();
+    lastDormant = undefined;
+    log.show();
+    log.info("──────── re-detecting ────────");
+    await start(context, status);
+    if (session) {
+      void vscode.window.showInformationMessage(
+        `CR-Track is active on ${session.repos.map((r) => r.name).join(", ")}.`,
+      );
+    } else {
+      const choice = await vscode.window.showWarningMessage(
+        "CR-Track is still inactive. The log lists every path that was tried.",
+        "Show log",
+        "Set Claude path…",
+      );
+      if (choice === "Show log") log.show();
+      else if (choice === "Set Claude path…") {
+        await vscode.commands.executeCommand("workbench.action.openSettings", "crTrack.claudePath");
+      }
+    }
+  });
+
   register("crTrack.clearFindings", () => {
     session?.diagnostics.clear();
     session?.tree.clear();

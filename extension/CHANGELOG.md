@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.3
+
+**Finds Claude when it lives inside the Claude Code editor extension.**
+
+The reported case, and the one the previous two fixes both missed. Installing
+Claude Code from the VS Code marketplace gives you a working Claude terminal and
+no `claude` on PATH at all — the binary ships inside the extension directory, at
+`~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude`.
+Everywhere CR-Track looked was a place a *CLI install* puts it, so it reported
+"no Claude CLI" to someone who could see Claude working in the next pane.
+
+- **Editor-bundled binaries are searched first**, across VS Code, Insiders,
+  Cursor, Windsurf, VSCodium and remote/server installs, newest version first.
+  First rather than last on purpose: if the editor ships a Claude, that is the
+  one the developer is actually using.
+- **The version probe now allows 60 seconds, not 15.** The code's own comment
+  said a cold Windows machine takes 20+ seconds — so on exactly those machines
+  every candidate timed out and the CLI was reported missing. That alone could
+  produce this symptom with a perfectly normal install.
+- **Every rejected candidate is logged with the reason.** A "not found" now
+  names each path tried and what happened, instead of being an assertion the
+  user has no way to argue with.
+- **Caches expire.** A successful detection was remembered for the whole window
+  lifetime; it now expires after ten minutes, so installing or upgrading Claude
+  is picked up without a reload.
+- **New command: "CR-Track: Re-detect Claude CLI and repositories"** — clears
+  every cached answer and re-runs startup, then says what it found or offers the
+  log and the setting.
+
 ## 0.4.2
 
 **Watches every repository in the window, not just the first.**

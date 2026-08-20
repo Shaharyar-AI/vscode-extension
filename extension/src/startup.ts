@@ -31,6 +31,12 @@ export interface Gate {
  */
 let cached: { key: string; status: CliStatus; at: number } | undefined;
 const FAILURE_TTL_MS = 10_000;
+/**
+ * Even a success expires. Installing or upgrading the CLI mid-session should be
+ * picked up without a reload; remembering a path forever is how a stale answer
+ * outlives the thing that made it true.
+ */
+const SUCCESS_TTL_MS = 10 * 60_000;
 
 export function clearStartupCache(): void {
   cached = undefined;
@@ -39,7 +45,8 @@ export function clearStartupCache(): void {
 async function locateCached(override: string | undefined): Promise<CliStatus> {
   const key = override ?? "";
   if (cached && cached.key === key) {
-    const fresh = cached.status.ok || Date.now() - cached.at < FAILURE_TTL_MS;
+    const age = Date.now() - cached.at;
+    const fresh = cached.status.ok ? age < SUCCESS_TTL_MS : age < FAILURE_TTL_MS;
     if (fresh) return cached.status;
   }
   const started = Date.now();
@@ -77,7 +84,16 @@ export async function checkStartup(
     return { ready: true, claudePath: status.path, version: status.version };
   }
 
-  log.warn(`Claude CLI unavailable (${status.reason}): ${status.detail}`);
+  log.warn(`Claude CLI unavailable (${status.reason})`);
+  // Every candidate and why it was rejected. This is the difference between a
+  // user saying "it says no Claude but I have Claude" and being able to point
+  // at the exact path we tried and what happened.
+  const attempts = status.attempts ?? [];
+  if (attempts.length) {
+    for (const a of attempts) log.info(`  tried ${a.path} — ${a.why}`);
+  } else {
+    log.info(`  ${status.detail}`);
+  }
   await notifyOnce(context, status);
   return { ready: false, reason: installHint(status) };
 }

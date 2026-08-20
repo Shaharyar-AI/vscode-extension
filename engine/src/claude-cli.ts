@@ -14,9 +14,27 @@ import { run } from "./proc";
 /** Bump when we start relying on a newer flag. */
 export const MIN_CLI_VERSION = "2.0.0";
 
+/**
+ * How long one `claude --version` may take.
+ *
+ * Generous on purpose. The CLI starts a Node runtime, and on a cold Windows
+ * machine with an antivirus scanner in the path that has been measured at over
+ * twenty seconds. The previous fifteen-second limit meant every candidate timed
+ * out on exactly those machines and the extension reported the CLI as missing
+ * on a machine where it plainly worked.
+ */
+const VERSION_PROBE_MS = 60_000;
+
 export type CliStatus =
   | { ok: true; path: string; version: string }
-  | { ok: false; reason: "not-found" | "too-old" | "unusable"; detail: string; path?: string };
+  | {
+      ok: false;
+      reason: "not-found" | "too-old" | "unusable";
+      detail: string;
+      path?: string;
+      /** Every candidate that was run, and why it was rejected. */
+      attempts?: { path: string; why: string }[];
+    };
 
 const isWindows = process.platform === "win32";
 
@@ -49,9 +67,59 @@ function versionManagerBins(home: string): string[] {
   return out;
 }
 
+/**
+ * The `claude` bundled inside the Claude Code editor extension.
+ *
+ * This is the one that mattered most in practice. Someone who installs Claude
+ * Code from the VS Code marketplace gets a working Claude terminal and *no*
+ * `claude` on PATH at all — the binary lives inside the extension directory.
+ * They will tell you, correctly, that they have Claude installed, and every
+ * other lookup here will disagree with them.
+ */
+function editorExtensionBins(home: string): string[] {
+  const roots = [
+    process.env["VSCODE_EXTENSIONS"],
+    join(home, ".vscode", "extensions"),
+    join(home, ".vscode-insiders", "extensions"),
+    join(home, ".vscode-server", "extensions"),
+    join(home, ".vscode-oss", "extensions"),
+    join(home, ".cursor", "extensions"),
+    join(home, ".cursor-server", "extensions"),
+    join(home, ".windsurf", "extensions"),
+  ].filter((p): p is string => Boolean(p));
+
+  const out: string[] = [];
+  const binary = isWindows ? "claude.exe" : "claude";
+
+  for (const root of roots) {
+    let entries: string[];
+    try {
+      entries = readdirSync(root);
+    } catch {
+      continue;
+    }
+    // Newest first: several versions of the extension are commonly left behind,
+    // and the highest is the one the editor is actually running.
+    const mine = entries
+      .filter((e) => e.startsWith("anthropic.claude-code"))
+      .sort()
+      .reverse();
+    for (const entry of mine) {
+      out.push(join(root, entry, "resources", "native-binary", binary));
+      // Older layouts put it a level up.
+      out.push(join(root, entry, "resources", binary));
+      out.push(join(root, entry, "bin", binary));
+    }
+  }
+  return out;
+}
+
 function candidatePaths(): string[] {
   const home = homedir();
   const out: string[] = [];
+  // Ahead of everything else: an editor that bundles Claude is running that
+  // copy, and matching it avoids a version mismatch as well as a not-found.
+  out.push(...editorExtensionBins(home));
   if (isWindows) {
     const appdata = process.env["APPDATA"] ?? join(home, "AppData", "Roaming");
     const local = process.env["LOCALAPPDATA"] ?? join(home, "AppData", "Local");
@@ -155,7 +223,7 @@ export interface LocateOptions {
 async function anyRunnable(paths: string[]): Promise<boolean> {
   for (const path of paths) {
     try {
-      const r = await run(path, ["--version"], { timeoutMs: 15_000 });
+      const r = await run(path, ["--version"], { timeoutMs: VERSION_PROBE_MS });
       if (r.code === 0) return true;
     } catch {
       /* try the next one */
@@ -169,6 +237,10 @@ export async function locateClaude(
   options: LocateOptions = {},
 ): Promise<CliStatus> {
   const tried: string[] = [];
+  // Why each candidate was rejected. Without this a "not found" is unarguable
+  // and undiagnosable — the user can see the binary and we cannot say what we
+  // did with it.
+  const attempts: { path: string; why: string }[] = [];
 
   const candidates: string[] = [];
   if (override) candidates.push(override);
@@ -188,8 +260,9 @@ export async function locateClaude(
     tried.push(path);
     let out: string;
     try {
-      const r = await run(path, ["--version"], { timeoutMs: 15_000 });
+      const r = await run(path, ["--version"], { timeoutMs: VERSION_PROBE_MS });
       if (r.code !== 0) {
+        attempts.push({ path, why: `exited ${r.code}${r.timedOut ? " (timed out)" : ""}` });
         // Falling through to another CLI is right — refusing to work because a
         // stale setting points nowhere would be worse. Saying nothing is not:
         // the setting would appear to have no effect at all.
@@ -200,6 +273,7 @@ export async function locateClaude(
       }
       out = r.stdout.trim();
     } catch (err) {
+      attempts.push({ path, why: (err as NodeJS.ErrnoException).code ?? (err as Error).message });
       if (path === override) {
         options.onOverrideRejected?.(path, (err as NodeJS.ErrnoException).code ?? "could not run it");
       }
@@ -225,10 +299,13 @@ export async function locateClaude(
   return {
     ok: false,
     reason: "not-found",
+    attempts,
     detail:
-      tried.length > 0
-        ? `checked: ${tried.join(", ")}`
-        : "not on PATH and not in any known install location",
+      attempts.length > 0
+        ? attempts.map((a) => `${a.path} (${a.why})`).join("; ")
+        : tried.length > 0
+          ? `checked: ${tried.join(", ")}`
+          : "not on PATH and not in any known install location",
   };
 }
 
