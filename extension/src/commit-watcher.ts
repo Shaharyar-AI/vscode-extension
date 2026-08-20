@@ -13,11 +13,21 @@
 
 import { join } from "node:path";
 import * as vscode from "vscode";
-import { headSha, lastRefAction } from "@engine/git";
+import { checkRepo, commitTimestamp, headSha, lastRefAction } from "@engine/git";
 import { log } from "./log";
 
 /** Reflog actions that mean "the developer committed something". */
 const COMMIT_ACTIONS = new Set(["commit", "commit (amend)", "commit (initial)", "commit (merge)"]);
+
+/**
+ * How old a commit may be and still count as "just landed".
+ *
+ * A commit CR-Track is meant to review was made seconds ago, by definition —
+ * the watcher fired because it appeared. Anything older is history that was
+ * already there, and reviewing it makes the extension look like it fires at
+ * random. Generous enough to survive a slow machine and a skewed clock.
+ */
+const FRESH_MS = 10 * 60 * 1000;
 
 export class CommitWatcher implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -31,6 +41,16 @@ export class CommitWatcher implements vscode.Disposable {
    * there.
    */
   private readonly primed: Promise<void>;
+  /**
+   * Whether the starting HEAD is actually known.
+   *
+   * An empty `lastSeen` has two very different causes. A repository with no
+   * commits yet is fine — its first commit really is new and must be reviewed.
+   * Git failing to answer is not: assuming the current HEAD is new reviews
+   * whatever history happens to be sitting there, which is how a week-old
+   * commit ended up being reviewed on a machine in the wild.
+   */
+  private primeOk = false;
 
   constructor(
     private readonly repoRoot: string,
@@ -54,6 +74,17 @@ export class CommitWatcher implements vscode.Disposable {
   /** Record the current HEAD so an existing commit is not reviewed on startup. */
   private async prime(): Promise<void> {
     this.lastSeen = await headSha(this.repoRoot);
+    if (this.lastSeen) {
+      this.primeOk = true;
+      return;
+    }
+    // No HEAD. Ask git whether that is because the repository is empty.
+    this.primeOk = (await checkRepo(this.repoRoot)).ok;
+    log.info(
+      this.primeOk
+        ? "No commits yet — the first one will be reviewed"
+        : "Could not read HEAD at startup; the current commit will be adopted, not reviewed",
+    );
   }
 
   /**
@@ -74,13 +105,34 @@ export class CommitWatcher implements vscode.Disposable {
     if (this.disposed) return;
 
     const sha = await headSha(this.repoRoot);
-    if (!sha || sha === this.lastSeen) return;
+    if (!sha) return;
+
+    // Priming failed outright, so the current HEAD tells us nothing about what
+    // is new. Adopt it and wait for the next move.
+    if (!this.primeOk) {
+      this.lastSeen = sha;
+      this.primeOk = true;
+      log.info(`Adopted ${sha.slice(0, 8)} as the starting point`);
+      return;
+    }
+    if (sha === this.lastSeen) return;
 
     const action = await lastRefAction(this.repoRoot);
     this.lastSeen = sha;
 
     if (!COMMIT_ACTIONS.has(action)) {
       log.info(`HEAD moved to ${sha.slice(0, 8)} via "${action}" — not a commit, ignoring`);
+      return;
+    }
+
+    // Belt and braces. The reflog says a commit put HEAD here, but a reflog can
+    // be replayed and a clone rewrites one wholesale; the commit's own date is
+    // the independent check that this actually just happened.
+    const madeAt = await commitTimestamp(this.repoRoot, sha);
+    const ageMs = Date.now() - madeAt * 1000;
+    if (madeAt && ageMs > FRESH_MS) {
+      const minutes = Math.round(ageMs / 60_000);
+      log.info(`${sha.slice(0, 8)} was committed ${minutes}m ago — not new, ignoring`);
       return;
     }
 

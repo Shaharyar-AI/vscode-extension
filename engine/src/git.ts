@@ -353,6 +353,20 @@ export async function lastRefAction(repoRoot: string): Promise<string> {
   return line.split(":")[0]?.trim().toLowerCase() ?? "";
 }
 
+/**
+ * When a commit was made, as epoch seconds. `0` if it cannot be read.
+ *
+ * Used to tell a commit that just landed from one that has been sitting in the
+ * repository for a week. Committer date, not author date: a rebased or
+ * cherry-picked commit keeps its original author date but is genuinely new to
+ * this branch, and reviewing it is correct.
+ */
+export async function commitTimestamp(repoRoot: string, sha: string): Promise<number> {
+  const out = await gitSoft(repoRoot, ["show", "-s", "--format=%ct", sha]);
+  const seconds = Number.parseInt(out.trim(), 10);
+  return Number.isFinite(seconds) ? seconds : 0;
+}
+
 export async function readCommit(repoRoot: string, sha: string): Promise<CommitInfo | null> {
   const out = await gitSoft(repoRoot, [
     "show", "-s", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%ae%x1f%aI%x1f%P", sha,

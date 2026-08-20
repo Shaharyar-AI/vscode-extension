@@ -91,12 +91,16 @@ export async function transfer(from: string, to: string, amount: any) {
   }
 
   console.log("\n── Waiting for the review (up to 5 minutes)");
+  // Reporting happens after the review announces its findings, so waiting for
+  // the finding count alone would check the log mid-upload — the report would
+  // be on the dashboard while the test called it missing.
+  const DONE = /Report sent to the dashboard|Dashboard unreachable|Report written locally|Reporting failed|Review failed/;
   const deadline = Date.now() + 300_000;
   let last = "";
   while (Date.now() < deadline) {
     const line = state.logLines[state.logLines.length - 1] || "";
     if (line !== last) { last = line; console.log("  " + line); }
-    if (/finding\(s\) in|Review failed/.test(state.logLines.join("\n"))) break;
+    if (DONE.test(state.logLines.join(String.fromCharCode(10)))) break;
     await sleep(1000);
   }
   const log = state.logLines.join("\n");

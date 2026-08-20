@@ -24,6 +24,14 @@ one developers actually notice.
   to the CR-Track dashboard, so a fresh install reports without setup. A
   repository's `.cr-track.yaml` still overrides it.
 
+**A spurious trigger no longer reviews old history.** Seen on a real machine
+within minutes of installing this version: the watcher fired on a repository
+whose HEAD had not moved, the starting HEAD had never been recorded, and CR-Track
+reviewed a commit from the previous week. An unknown starting point is now
+adopted rather than treated as new, an empty repository is told apart from git
+failing to answer so a first-ever commit is still reviewed, and a commit whose
+own timestamp is more than ten minutes old is refused outright.
+
 **The uninstall failure is fixed.** Killing a review left its child processes
 running: on Windows `SIGTERM` is advisory and there are no process groups, so
 `claude.cmd`'s children survived, held handles inside the extension directory,

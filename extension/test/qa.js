@@ -356,6 +356,64 @@ export async function transfer(from: string, to: string, amount: any) {
     restore();
   }
 
+  {
+    // The failure this guards against was seen in the wild: the watcher fired
+    // on a repository whose HEAD had not moved, priming had not recorded a
+    // SHA, and the extension reviewed a commit from the previous week.
+    const repo = makeRepo("stale-head");
+    const old = new Date(Date.now() - 8 * 24 * 3600 * 1000).toISOString();
+    write(repo, { "src/old.ts": "export const old = 1;" });
+    git(repo, "add", "-A");
+    execFileSync("git", ["commit", "-qm", "an old commit"], {
+      cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, GIT_AUTHOR_DATE: old, GIT_COMMITTER_DATE: old },
+    });
+
+    const { state, restore } = await boot(repo);
+    state.logLines.length = 0;
+    // Fire without any commit having happened — the exact wild condition.
+    for (const w of state.fileWatchers) {
+      if (/logs[/]HEAD|^HEAD$/.test(w.pattern)) w.fireChange({});
+    }
+    await sleep(4000);
+    check("A week-old HEAD is never reviewed",
+      !/Reviewing [0-9a-f]{7}/.test(logText(state)),
+      "ignored",
+      `an existing commit was reviewed on a spurious trigger: ${logText(state).slice(-300)}`);
+    restore();
+  }
+
+  {
+    // The empty-repository case the freshness guard must not break: with no
+    // commits at all there is no HEAD to prime from, but the first commit is
+    // genuinely new and has to be reviewed.
+    const repo = path.join(TMP, "first-commit");
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, "init", "-q");
+    git(repo, "config", "user.name", "QA Bot");
+    git(repo, "config", "user.email", "qa@example.com");
+    git(repo, "config", "commit.gpgsign", "false");
+
+    const { state, restore } = await boot(repo);
+    check("An empty repository still activates",
+      !/inactive/i.test(state.statusText), state.statusText);
+    check("...and says the first commit will be reviewed",
+      /No commits yet/i.test(logText(state)), "primed as empty");
+
+    if (FAST) {
+      skipped("The very first commit is reviewed", "needs the model");
+    } else {
+      state.logLines.length = 0;
+      commit(repo, "first ever commit", { "src/first.ts": BAD_SOURCE });
+      await fireCommitWatcher(state);
+      check("The very first commit in a repository is reviewed",
+        /Reviewing [0-9a-f]{7}/.test(logText(state)),
+        "reviewed",
+        `the first commit was skipped: ${logText(state).slice(-300)}`);
+    }
+    restore();
+  }
+
   // ── 7. The report ──────────────────────────────────────────────────────
   section("7. The report reaches the dashboard");
   {
