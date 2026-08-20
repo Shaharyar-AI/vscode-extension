@@ -70,6 +70,21 @@ has("resources/references/lang/typescript.md")
   ? ok("language guides bundled")
   : no("language guides missing", "run: npm run build");
 
+// ── the thing that made an uninstall fail ────────────────────────────────
+console.log("\nTeardown");
+const bundle = has("dist/extension.js")
+  ? fs.readFileSync(path.join(DIR, "dist/extension.js"), "utf8")
+  : "";
+bundle.includes("taskkill")
+  ? ok("process-tree kill compiled in")
+  : no("no taskkill in the bundle", "orphaned CLI children will block an uninstall on Windows");
+
+console.log("\nDashboard");
+const endpoint = p.contributes?.configuration?.properties?.["crTrack.endpoint"]?.default ?? "";
+if (!endpoint) hm("no default endpoint", "reports stay on disk until each user configures one");
+else if (!/^https:\/\/.+/.test(endpoint)) no("default endpoint is not an https URL", endpoint);
+else ok("default endpoint", endpoint);
+
 // ── version discipline ───────────────────────────────────────────────────
 console.log("\nVersion");
 const changelog = has("CHANGELOG.md") ? fs.readFileSync(path.join(DIR, "CHANGELOG.md"), "utf8") : "";

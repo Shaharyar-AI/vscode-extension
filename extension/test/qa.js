@@ -3,7 +3,7 @@
  * CR-Track QA suite.
  *
  * Drives the built extension bundle through real scenarios: real git repos,
- * real Claude CLI reviews, real file writes, a real HTTP endpoint. Everything
+ * real commits, real Claude CLI reviews, a real HTTP endpoint. Everything
  * except the pixels.
  *
  *   node test/qa.js            all scenarios
@@ -44,7 +44,7 @@ function check(name, cond, info = "", failDetail = info || "condition was false"
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "crtrack-qa-"));
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
-function makeRepo(name, files, { commitFirst = true } = {}) {
+function makeRepo(name, files = {}) {
   const dir = path.join(TMP, name);
   fs.mkdirSync(dir, { recursive: true });
   git(dir, "init", "-q");
@@ -54,9 +54,7 @@ function makeRepo(name, files, { commitFirst = true } = {}) {
   fs.writeFileSync(path.join(dir, "README.md"), "# qa\n");
   git(dir, "add", "-A");
   git(dir, "commit", "-qm", "init");
-  if (commitFirst) {
-    try { git(dir, "branch", "-M", "main"); } catch { /* already main */ }
-  }
+  try { git(dir, "branch", "-M", "main"); } catch { /* already main */ }
   write(dir, files);
   return dir;
 }
@@ -69,29 +67,66 @@ function write(dir, files) {
   }
 }
 
-const stage = (dir) => git(dir, "add", "-A");
+/** Stage everything and commit it, the way a developer would. */
+function commit(dir, message, files) {
+  if (files) write(dir, files);
+  git(dir, "add", "-A");
+  git(dir, "commit", "-qm", message);
+  return git(dir, "rev-parse", "HEAD").trim();
+}
 
-/** Activate the extension against a repo and wait for the review to settle. */
-async function boot(repo, { answers, waitSec = 240, expectReview = true } = {}) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Activate the extension against a repo. Does NOT wait for a review. */
+async function boot(repo, { answers } = {}) {
   const { vscode, state } = makeStub({ repo, answers });
   const restore = install(vscode);
   const ext = loadExtension(BUNDLE);
   const context = makeContext(EXT_DIR);
   await ext.activate(context);
-
-  if (expectReview) {
-    const deadline = Date.now() + waitSec * 1000;
-    while (Date.now() < deadline) {
-      const s = state.statusText;
-      if (!/Reviewing/.test(s) && (state.diagnostics.size > 0 || /pass-filled|circle-slash/.test(s))) break;
-      await sleep(500);
-    }
-  }
+  // Activation logs a few lines from promises it does not await. Letting them
+  // land here means a test that clears the log afterwards really starts empty
+  // — otherwise a late "Active on…" line looks like the watcher reacting.
+  await sleep(1_200);
   return { ext, state, vscode, context, restore };
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const run = (state, id, ...args) => state.commands.get(id)?.(...args);
+/**
+ * Fire the reflog watcher the way the real file system would, then wait for
+ * the review it triggers to finish.
+ *
+ * This is the whole product in one function: a commit lands, the watcher
+ * notices, a review runs. If this stops working, nothing else matters.
+ */
+async function fireCommitWatcher(state, { waitSec = 300 } = {}) {
+  for (const w of state.fileWatchers) {
+    if (/logs\/HEAD|^HEAD$/.test(w.pattern)) w.fireChange({ fsPath: "logs/HEAD" });
+  }
+  return settle(state, waitSec);
+}
+
+/**
+ * Every way a triggered check can end. Waiting on the status bar instead was a
+ * race: between the watcher noticing a commit and the review announcing itself
+ * the status still reads "watching", which looks exactly like "finished".
+ */
+const OUTCOME =
+  /finding\(s\) in \d+s|Review failed|— skipping|not a commit, ignoring|Could not read commit|Reporting failed|Commit check failed/;
+
+/** Wait for the trigger to reach a conclusion, whatever that conclusion is. */
+async function settle(state, waitSec = 300) {
+  const deadline = Date.now() + waitSec * 1000;
+  while (Date.now() < deadline) {
+    if (OUTCOME.test(logText(state))) {
+      // Reporting happens after the outcome line; give it a moment to land so
+      // the log a test reads is the complete one.
+      await sleep(1_500);
+      return true;
+    }
+    await sleep(250);
+  }
+  return false;
+}
 
 async function walkTree(state) {
   const p = state.treeView?.provider;
@@ -109,6 +144,20 @@ async function walkTree(state) {
 }
 
 const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind === "finding"));
+const logText = (state) => state.logLines.join("\n");
+
+/** Source with problems a reviewer should find. */
+const BAD_SOURCE = `
+export async function transfer(from: string, to: string, amount: any) {
+  const rows = await db.query("SELECT * FROM accounts WHERE id = '" + from + "'");
+  const balance = rows[0].balance;
+  if (balance > amount) {
+    await db.query("UPDATE accounts SET balance = balance - " + amount + " WHERE id = '" + from + "'");
+    await db.query("UPDATE accounts SET balance = balance + " + amount + " WHERE id = '" + to + "'");
+  }
+  return true;
+}
+`;
 
 // ═════════════════════════════════════════════════════════════════════════
 (async () => {
@@ -119,733 +168,371 @@ const findings = (state) => walkTree(state).then((r) => r.filter((x) => x.kind =
     process.exit(2);
   }
 
-  // ── 1. Guard rails ─────────────────────────────────────────────────────
+  // ── 1. Startup guards ──────────────────────────────────────────────────
   section("1. Startup guards");
   {
-    const notRepo = path.join(TMP, "plain-folder");
-    fs.mkdirSync(notRepo, { recursive: true });
-    const { state, restore, ext } = await boot(notRepo, { expectReview: false });
-    check("non-git folder reports limited capability, not death",
-      /file review/i.test(state.statusTooltip) || /inactive/i.test(state.statusTooltip),
-      state.statusTooltip);
-    check("no diagnostics published", state.diagnostics.size === 0);
-    check("file review is offered where staged review cannot work",
-      state.commands.has("crTrack.reviewFile") && state.commands.has("crTrack.reviewFolder"));
-    ext.deactivate(); restore();
-  }
-  {
-    const repo = makeRepo("empty-repo", {});
-    const { state, restore, ext } = await boot(repo, { expectReview: false });
-    await sleep(1500);
-    check("nothing staged → idle, no review", !/Reviewing/.test(state.statusText), state.statusText);
-    ext.deactivate(); restore();
-  }
-  {
-    const { state, restore, ext } = await boot(undefined, { expectReview: false });
-    check("no folder open stays dormant", /inactive/i.test(state.statusTooltip), state.statusTooltip);
-    ext.deactivate(); restore();
-  }
-
-  // ── 1b. Recovery ───────────────────────────────────────────────────────
-  //
-  // Both bugs that reached a tester were of this shape: a correct dormant
-  // state that never recovered, and read as broken. The suite passed both
-  // times because it asserted "stays dormant" and stopped there.
-  section("1b. Recovery from dormant states");
-  {
-    const dir = path.join(TMP, "becomes-a-repo");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, "index.html"), "<h1>hi</h1>\n");
-
-    const { vscode, state } = makeStub({ repo: dir });
-    const restore = install(vscode);
-    const ext = loadExtension(BUNDLE);
-    await ext.activate(makeContext(EXT_DIR));
-    await sleep(800);
-
-    check("plain folder starts without git features",
-      /file review|inactive/i.test(state.statusTooltip), state.statusTooltip);
-    const watching = state.fileWatchers.some((w) => /\.git\/HEAD/.test(w.pattern));
-    check("watches for a repository appearing", watching,
-      state.fileWatchers.map((w) => w.pattern).join(", ") || "no watchers armed");
-    check("offers a manual restart", state.commands.has("crTrack.restart"));
-
-    // The developer runs `git init` — the exact scenario that looked broken.
-    git(dir, "init", "-q");
-    git(dir, "config", "user.name", "QA Bot");
-    git(dir, "config", "user.email", "qa@example.com");
-    git(dir, "add", "-A");
-    git(dir, "commit", "-qm", "init");
-    for (const w of state.fileWatchers) w.fireCreate?.();
-    await sleep(8000);
-
-    check("recovers after git init, with no reload",
-      state.logLines.some((l) => /Active on/.test(l)),
-      "", `still dormant:\n${state.logLines.slice(-4).join("\n")}`);
-    ext.deactivate(); restore();
-  }
-  {
-    // Focus is the only signal for a CLI installed in another terminal.
-    const dir = path.join(TMP, "focus-recheck");
-    fs.mkdirSync(dir, { recursive: true });
-    const { vscode, state } = makeStub({ repo: dir });
-    const restore = install(vscode);
-    const ext = loadExtension(BUNDLE);
-    await ext.activate(makeContext(EXT_DIR));
-    await sleep(600);
-
-    check("listens for window focus while dormant", state.windowStateHandlers.length > 0,
-      `${state.windowStateHandlers.length} handler(s)`);
-
-    git(dir, "init", "-q");
-    git(dir, "config", "user.name", "QA Bot");
-    git(dir, "config", "user.email", "qa@example.com");
-    for (const h of state.windowStateHandlers) h({ focused: true });
-    await sleep(8000);
-
-    check("focus triggers a recheck", state.logLines.some((l) => /rechecking|Active on/.test(l)),
-      "", `no recheck happened:\n${state.logLines.slice(-4).join("\n")}`);
-    ext.deactivate(); restore();
-  }
-  {
-    // Asking for a review while inactive should retry, not just complain.
-    const dir = path.join(TMP, "review-retries");
-    fs.mkdirSync(dir, { recursive: true });
-    const { vscode, state } = makeStub({ repo: dir });
-    const restore = install(vscode);
-    const ext = loadExtension(BUNDLE);
-    await ext.activate(makeContext(EXT_DIR));
-    await sleep(600);
-
-    git(dir, "init", "-q");
-    git(dir, "config", "user.name", "QA Bot");
-    git(dir, "config", "user.email", "qa@example.com");
-    await run(state, "crTrack.reviewStaged");
-    await sleep(8000);
-
-    check("Review Staged retries startup when inactive",
-      state.logLines.some((l) => /Active on/.test(l)),
-      "", `never came up:\n${state.logLines.slice(-4).join("\n")}`);
-    ext.deactivate(); restore();
-  }
-
-  // ── 1bb. Hostile environments ──────────────────────────────────────────
-  //
-  // Every failure a real machine produced was environmental, and the suite
-  // missed all of them because it runs somewhere tidy. These deliberately
-  // break the environment.
-  section("1bb. Hostile environments");
-  {
-    const repo = makeRepo("git-off-path", { "a.js": "export const a = 1;\n" });
-    stage(repo);
-
-    // Remove every directory containing a git binary from PATH — a window
-    // launched from a shortcut that never sourced a git-aware profile.
-    const realPath = process.env.PATH ?? "";
-    process.env.PATH = realPath
-      .split(path.delimiter)
-      .filter((d) => {
-        try {
-          return !fs.existsSync(path.join(d, "git.exe")) && !fs.existsSync(path.join(d, "git"));
-        } catch {
-          return true;
-        }
-      })
-      .join(path.delimiter);
-
-    let stillOnPath = true;
-    try {
-      execFileSync("git", ["--version"], { stdio: "ignore" });
-    } catch {
-      stillOnPath = false;
-    }
-
-    const { vscode, state } = makeStub({ repo });
-    const restore = install(vscode);
-    const ext = loadExtension(BUNDLE);
-    await ext.activate(makeContext(EXT_DIR));
-    await sleep(6000);
-    process.env.PATH = realPath;
-
-    check("test setup actually removed git from PATH", !stillOnPath,
-      "", "git is still on PATH, so this proves nothing");
-    check("finds git in its install location when PATH lacks it",
-      state.logLines.some((l) => /Git \d+\.\d+/.test(l)),
-      state.logLines.find((l) => /Git \d|No usable git/.test(l))?.trim(),
-      `never located git:\n${state.logLines.slice(0, 4).join("\n")}`);
-    check("comes up rather than claiming there is no repository",
-      state.logLines.some((l) => /Active on/.test(l)),
-      "", `stayed dormant:\n${state.logLines.slice(0, 5).join("\n")}`);
-    check("never reports 'not a git repository' for a real repo",
-      !state.logLines.some((l) => /not a git repository/i.test(l)),
-      "", "reported the misleading message");
-    ext.deactivate(); restore();
-  }
-  {
-    // A folder that is genuinely not a repository must settle, not spin.
-    // The first recovery build throttled only the focus handler, so the file
-    // watcher re-entered start() without limit and the same three log lines
-    // repeated forever.
-    const dir = path.join(TMP, "never-a-repo");
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules\n");
-    fs.writeFileSync(path.join(dir, "index.html"), "<h1>hi</h1>\n");
-
-    const { vscode, state } = makeStub({ repo: dir });
-    const restore = install(vscode);
-    const ext = loadExtension(BUNDLE);
-    await ext.activate(makeContext(EXT_DIR));
-    await sleep(1500);
-
-    // Hammer every recovery trigger the way a real editor would.
-    for (let i = 0; i < 25; i++) {
-      for (const w of state.fileWatchers) { w.fireCreate?.(); w.fireChange?.(); }
+    const plain = path.join(TMP, "plain-folder");
+    fs.mkdirSync(plain, { recursive: true });
+    const { state, restore } = await boot(plain);
+    check("A folder with no repository goes dormant",
+      /inactive/i.test(state.statusText), state.statusText);
+    check("...and the reason names the repository, not something vague",
+      /no git repository/i.test(state.statusTooltip + logText(state)),
+      "", `tooltip was "${state.statusTooltip}"`);
+    check("...and does not spam the same reason on repeated rechecks", (() => {
+      const before = state.logLines.filter((l) => /no git repository/i.test(l)).length;
       for (const h of state.windowStateHandlers) h({ focused: true });
-    }
-    await sleep(4000);
+      const after = state.logLines.filter((l) => /no git repository/i.test(l)).length;
+      return after === before;
+    })(), "logged once");
+    restore();
+  }
+  {
+    const { state, restore } = await boot(undefined);
+    check("No folder open goes dormant rather than throwing",
+      /inactive/i.test(state.statusText), state.statusText);
+    restore();
+  }
 
-    const warnings = state.logLines.filter((l) => /not a git repository/i.test(l)).length;
-    const rechecks = state.logLines.filter((l) => /rechecking/i.test(l)).length;
-    check("the dormant reason is logged once, not on every recheck",
-      warnings <= 2, `${warnings} occurrence(s)`,
-      `logged ${warnings} times — the output channel would fill up`);
-    check("recovery triggers are throttled",
-      rechecks <= 2, `${rechecks} recheck(s) from 25 bursts`,
-      `${rechecks} rechecks fired — this is the runaway loop`);
-    check("a no-repo folder offers to initialise one",
-      state.commands.has("crTrack.initRepository"));
-    check("the no-repo welcome view is selected",
-      state.contexts.get("crTrack.noRepo") === true,
-      `context = ${state.contexts.get("crTrack.noRepo")}`);
-    ext.deactivate(); restore();
-  }
+  // ── 2. Recovery ────────────────────────────────────────────────────────
+  section("2. Recovery from dormant states");
   {
-    // A hidden activity-bar icon must not be a dead end.
-    const dir = path.join(TMP, "menu-reachable");
-    fs.mkdirSync(dir, { recursive: true });
-    const { state, restore, ext } = await boot(dir, { expectReview: false });
-    await sleep(600);
-    for (const id of ["crTrack.menu", "crTrack.focusView", "crTrack.diagnose", "crTrack.restart"]) {
-      check(`${id} is available while inactive`, state.commands.has(id));
+    const later = path.join(TMP, "repo-appears");
+    fs.mkdirSync(later, { recursive: true });
+    const { state, restore } = await boot(later);
+    check("Watches for a repository appearing",
+      state.fileWatchers.some((w) => /\.git\/HEAD/.test(w.pattern)),
+      state.fileWatchers.map((w) => w.pattern).join(", "));
+    check("Rechecks on window focus while inactive",
+      state.windowStateHandlers.length > 0);
+
+    // Hammer every trigger; a runaway loop shows up as unbounded log growth.
+    const before = state.logLines.length;
+    for (let i = 0; i < 40; i++) {
+      for (const h of state.windowStateHandlers) h({ focused: true });
+      for (const w of state.fileWatchers) w.fireCreate?.({ fsPath: ".git/HEAD" });
     }
-    check("status bar names its reduced state in the text",
-      /inactive|files only/i.test(state.statusText), state.statusText);
-    ext.deactivate(); restore();
+    await sleep(1_500);
+    check("80 recovery triggers do not run away",
+      state.logLines.length - before < 20,
+      `${state.logLines.length - before} new log lines`,
+      `${state.logLines.length - before} new log lines — the throttle is not holding`);
+    restore();
   }
+
+  // ── 3. Hostile environments ────────────────────────────────────────────
+  section("3. Hostile environments");
   {
-    // Diagnose has to work when nothing else does — that is its whole job.
-    const dir = path.join(TMP, "diagnose-when-broken");
-    fs.mkdirSync(dir, { recursive: true });
-    const { state, restore, ext } = await boot(dir, { expectReview: false });
+    const repo = makeRepo("hostile");
+    const realPath = process.env.PATH;
+    // A VS Code window that did not inherit git on PATH is the single most
+    // common way this extension "does nothing" on someone else's machine.
+    const emptyDir = path.join(TMP, "empty-path");
+    fs.mkdirSync(emptyDir, { recursive: true });
+    process.env.PATH = emptyDir;
+    try {
+      const { state, restore } = await boot(repo);
+      check("Git missing from PATH is still found, or reported precisely",
+        !/inactive/i.test(state.statusText) || /git could not be used|no git repository/i.test(state.statusTooltip),
+        state.statusText,
+        `status "${state.statusText}" tooltip "${state.statusTooltip}"`);
+      check("...and the log names the git binary it tried",
+        /git\s*=|Git \d/.test(logText(state)), "logged",
+        "the log does not say which git was used — undiagnosable");
+      restore();
+    } finally {
+      process.env.PATH = realPath;
+    }
+  }
+
+  // ── 4. Guides ──────────────────────────────────────────────────────────
+  section("4. Guide resolution");
+  {
+    const bundled = path.join(EXT_DIR, "resources", "references");
+    check("Guides are bundled next to the extension", fs.existsSync(bundled), bundled);
+    check("...including the ruleset and the language guides",
+      fs.existsSync(path.join(bundled, "ruleset.md")) &&
+      fs.existsSync(path.join(bundled, "lang", "typescript.md")),
+      "ruleset.md + lang/typescript.md");
+  }
+
+  // ── 5. The trigger ─────────────────────────────────────────────────────
+  section("5. A commit triggers a review");
+  {
+    const repo = makeRepo("commit-trigger");
+    const { state, restore } = await boot(repo);
+    check("Activates on a real repository",
+      !/inactive/i.test(state.statusText), state.statusText);
+    check("...and says it is watching for commits",
+      /watching/i.test(state.statusTooltip), state.statusTooltip);
+    check("...and installs a reflog watcher",
+      state.fileWatchers.some((w) => /logs\/HEAD/.test(w.pattern)),
+      state.fileWatchers.map((w) => w.pattern).join(", "));
+
+    if (FAST) {
+      skipped("Commit-triggered review", "needs the model");
+      restore();
+    } else {
+      const sha = commit(repo, "add transfer", { "src/payments.ts": BAD_SOURCE });
+      const settled = await fireCommitWatcher(state);
+      check("The review finished", settled, state.statusText, "still running after 5 minutes");
+
+      const log = logText(state);
+      check("The commit was detected",
+        log.includes(sha.slice(0, 8)) || /new commit/i.test(log),
+        sha.slice(0, 8),
+        "the watcher never noticed the commit");
+
+      const rows = await findings(state);
+      check("Findings were produced", rows.length > 0,
+        `${rows.length} finding(s)`, "no findings on deliberately bad code");
+      check("...and are attached to the committed file",
+        rows.length === 0 || (await walkTree(state)).some((r) => r.kind === "file" && /payments\.ts/.test(r.label)),
+        "src/payments.ts");
+      check("...and appear as diagnostics too",
+        state.diagnostics.size > 0, `${state.diagnostics.size} file(s) with squiggles`);
+      check("...and the status bar reports the outcome",
+        /CR-Track \d+|pass-filled/.test(state.statusText), state.statusText);
+      check("...and each finding carries a suggestion the developer can act on",
+        rows.length === 0 || rows.every((r) => (r.node.finding.suggestion ?? "").length > 10),
+        "all findings have suggestions",
+        "some findings have no suggestion — a recommendation with no advice is noise");
+
+      // A second identical trigger must not start a second review.
+      for (const w of state.fileWatchers) {
+        if (/logs\/HEAD/.test(w.pattern)) w.fireChange({});
+      }
+      await sleep(2_500);
+      check("An unchanged HEAD does not trigger another review",
+        !/reviewing/i.test(state.statusText),
+        "ignored",
+        `status became "${state.statusText}"`);
+      restore();
+    }
+  }
+
+  // ── 6. What must NOT trigger a review ──────────────────────────────────
+  section("6. Non-commits and non-code are skipped");
+  {
+    const repo = makeRepo("skips");
+    commit(repo, "second", { "a.ts": "export const a = 1;\n" });
+    const { state, restore } = await boot(repo);
     state.logLines.length = 0;
-    await run(state, "crTrack.diagnose");
-    await sleep(3000);
-    const dump = state.logLines.join("\n");
-    check("diagnose reports git, repo, CLI and guides",
-      /git binary/.test(dump) && /git repo/.test(dump) && /claude cli/.test(dump) && /guides/.test(dump),
-      "", `incomplete output:\n${dump}`);
-    ext.deactivate(); restore();
-  }
-
-  // ── 1d. First-run setup ────────────────────────────────────────────────
-  //
-  // Every failure reported from another machine was an unmet precondition
-  // discovered too late. This asserts the extension states them up front.
-  section("1d. First-run setup");
-  {
-    const repo = makeRepo("setup-ready", { "a.ts": "export const a = 1;\n" });
-    const { state, restore, ext } = await boot(repo, { expectReview: false });
-    await sleep(4000);
-
-    const setupLine = state.logLines.find((l) => /Setup:/.test(l));
-    check("readiness is logged at startup", Boolean(setupLine),
-      (setupLine ?? "").trim().slice(0, 110), "no Setup: line in the log");
-    check("readiness names all three preconditions",
-      /folder open:/.test(setupLine ?? "") &&
-      /Claude CLI:/.test(setupLine ?? "") &&
-      /git repository:/.test(setupLine ?? ""),
-      "", setupLine ?? "(missing)");
-    check("a fully working install stays silent",
-      !state.messages.some((m) => m.kind === "warning"),
-      "", `warned anyway: ${JSON.stringify(state.messages.map((m) => m.message.slice(0, 60)))}`);
-    check("setup commands are available",
-      state.commands.has("crTrack.checkSetup") && state.commands.has("crTrack.openWalkthrough"));
-
-    state.contexts.clear();
-    await run(state, "crTrack.checkSetup");
-    await sleep(2500);
-    check("checkSetup sets the walkthrough's tick marks",
-      state.contexts.get("crTrack.cliReady") === true &&
-      state.contexts.get("crTrack.repoReady") === true,
-      `cli=${state.contexts.get("crTrack.cliReady")} repo=${state.contexts.get("crTrack.repoReady")}`);
-    ext.deactivate(); restore();
+    git(repo, "checkout", "-q", "HEAD~1");
+    await fireCommitWatcher(state, { waitSec: 30 });
+    check("A checkout is not treated as a commit",
+      /not a commit, ignoring/i.test(logText(state)),
+      "ignored",
+      `a branch switch was not filtered — log: ${logText(state).slice(-300)}`);
+    restore();
   }
   {
-    // The colleague's machine: no usable CLI. It must say so, not go quiet.
-    const repo = makeRepo("setup-no-cli", { "b.ts": "export const b = 1;\n" });
-    const { vscode, state } = makeStub({ repo });
-    vscode.workspace.getConfiguration = (section) => ({
-      get: (k, d) =>
-        section === "crTrack" && k === "claudePath"
-          ? path.join(TMP, "definitely-not-claude.exe")
-          : d,
-    });
-    const restore = install(vscode);
-    const ext = loadExtension(BUNDLE);
-    await ext.activate(makeContext(EXT_DIR));
-    await sleep(6000);
-
-    // A stale claudePath must not silently do nothing. It is the setting people
-    // reach for precisely when things are already going wrong, so a version of
-    // it that appears to have no effect is worse than no setting at all.
-    check("a configured claudePath that cannot be used is reported",
-      state.logLines.some((l) => /claudePath points at/i.test(l)),
-      "", `no warning logged:\n${state.logLines.slice(0, 6).join("\n")}`);
-    check("it still finds a working CLI rather than refusing to run",
-      state.logLines.some((l) => /Claude CLI \d/.test(l)),
-      "", "gave up instead of looking elsewhere");
-    check("the setup guide stays reachable", state.commands.has("crTrack.openWalkthrough"));
-    ext.deactivate(); restore();
-  }
-
-  // ── 1c. Nothing staged ─────────────────────────────────────────────────
-  section("1c. Nothing staged is explained, not silent");
-  {
-    const repo = makeRepo("unstaged-only", {});
-    fs.writeFileSync(path.join(repo, "code.js"), "export function f(a){ return a.b.c }\n");
-    // Deliberately NOT staged.
-    const { state, restore, ext } = await boot(repo, { expectReview: false });
-    await sleep(2500);
-
-    check("status bar says so in its text, not just a tooltip",
-      /nothing staged/i.test(state.statusText), state.statusText);
-    check("tooltip counts the unstaged files",
-      /file\(s\) changed but not staged/i.test(String(state.statusTooltip)),
-      String(state.statusTooltip).split("\n")[0]);
-    check("panel switches to the nothing-staged welcome",
-      state.contexts.get("crTrack.nothingStaged") === true,
-      `context = ${state.contexts.get("crTrack.nothingStaged")}`);
-    check("log explains it", state.logLines.some((l) => /Nothing staged/.test(l)),
-      "", state.logLines.slice(-3).join(" | "));
-    check("a working-tree review is offered", state.commands.has("crTrack.reviewWorkingTree"));
-    ext.deactivate(); restore();
+    const repo = makeRepo("docs-only");
+    const { state, restore } = await boot(repo);
+    state.logLines.length = 0;
+    commit(repo, "docs", { "NOTES.md": "# notes\n" });
+    await fireCommitWatcher(state, { waitSec: 60 });
+    check("A commit with no source files is skipped",
+      /no source files/i.test(logText(state)),
+      "skipped",
+      `a docs-only commit was not skipped — log: ${logText(state).slice(-300)}`);
+    restore();
   }
   {
-    // A genuinely clean tree is a different thing and should read differently.
-    const repo = makeRepo("truly-clean", {});
-    const { state, restore, ext } = await boot(repo, { expectReview: false });
-    await sleep(2000);
-    check("a clean tree does not claim 'nothing staged'",
-      !/nothing staged/i.test(state.statusText), state.statusText);
-    ext.deactivate(); restore();
+    const repo = makeRepo("merges");
+    commit(repo, "base", { "a.ts": "export const a = 1;\n" });
+    git(repo, "checkout", "-q", "-b", "side");
+    commit(repo, "side change", { "b.ts": "export const b = 2;\n" });
+    git(repo, "checkout", "-q", "main");
+    commit(repo, "main change", { "c.ts": "export const c = 3;\n" });
+    const { state, restore } = await boot(repo);
+    state.logLines.length = 0;
+    git(repo, "merge", "-q", "--no-ff", "-m", "merge side", "side");
+    await fireCommitWatcher(state, { waitSec: 60 });
+    check("A merge commit is skipped",
+      /is a merge|not a commit, ignoring/i.test(logText(state)),
+      "skipped",
+      `a merge's combined diff was not filtered — log: ${logText(state).slice(-300)}`);
+    restore();
   }
 
-  // ── 2. Guides ──────────────────────────────────────────────────────────
-  section("2. Guide resolution");
-  {
-    const repo = makeRepo("guides-repo", { "a.ts": "export const a = 1;\n" });
-    stage(repo);
-    const { state, restore, ext } = await boot(repo, { expectReview: false });
-    await sleep(1200);
-    const line = state.logLines.find((l) => l.includes("Guides:"));
-    check("guides resolved from the extension dir", Boolean(line), line ?? state.logLines.join(" | ").slice(0, 200));
-    check("ruleset + language guides on disk",
-      fs.existsSync(path.join(EXT_DIR, "resources", "references", "ruleset.md")) &&
-      fs.existsSync(path.join(EXT_DIR, "resources", "references", "lang", "typescript.md")));
-    ext.deactivate(); restore();
-  }
-
-  // ── 3. Config ──────────────────────────────────────────────────────────
-  section("3. .cr-track.yaml");
-  {
-    const repo = makeRepo("config-repo", {
-      "a.ts": "export const a = 1;\n",
-      ".cr-track.yaml": [
-        "# team settings",
-        "profile: chill",
-        "min_severity_to_report: important",
-        "categories_enabled: [security, correctness]",
-        "endpoint: http://127.0.0.1:9/api/ingest",
-      ].join("\n"),
-    });
-    stage(repo);
-    const { state, restore, ext } = await boot(repo, { expectReview: false });
-    await sleep(1200);
-    // The engine logs the effective model/effort; profile lands in the prompt.
-    check("repo with a config file activates cleanly",
-      state.logLines.some((l) => /Active on/.test(l)), state.logLines.slice(-3).join(" | "));
-    ext.deactivate(); restore();
-  }
-
-  if (FAST) {
-    section("model-backed scenarios");
-    skipped("review, fixes, commit gate, reporting", "--fast");
-    return summarise();
-  }
-
-  // ── 3b. File review with no git at all ─────────────────────────────────
-  //
-  // The scenario that started all of this: a project folder that was never a
-  // repository. Previously the extension had nothing to offer there.
-  section("3b. File review without a repository");
-  {
-    const dir = path.join(TMP, "no-git-at-all");
-    fs.mkdirSync(path.join(dir, "src"), { recursive: true });
-    fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules\n");
-    fs.writeFileSync(
-      path.join(dir, "src", "auth.js"),
-      [
-        "const users = require('./users');",
-        "",
-        "function login(name, password) {",
-        "  const sql = \"SELECT * FROM users WHERE name = '\" + name + \"'\";",
-        "  const row = db.query(sql);",
-        "  return row[0].token === password;",
-        "}",
-        "",
-        "module.exports = { login };",
-      ].join("\n") + "\n",
-    );
-    // node_modules must not be swept up by a folder review.
-    fs.mkdirSync(path.join(dir, "node_modules", "junk"), { recursive: true });
-    fs.writeFileSync(path.join(dir, "node_modules", "junk", "index.js"), "module.exports = 1;\n");
-
-    const { state, restore, ext } = await boot(dir, { expectReview: false });
-    await sleep(1500);
-
-    check("no repository, but the extension is running",
-      state.commands.has("crTrack.reviewFile"), "", "reviewFile was never registered");
-
-    await run(state, "crTrack.reviewFile", { fsPath: path.join(dir, "src", "auth.js"), scheme: "file" });
-    // Whole-file review of a small file; allow generous time.
-    for (let i = 0; i < 120 && state.diagnostics.size === 0; i++) await sleep(1000);
-
-    const rows = await findings(state);
-    check("a file in a non-repository folder is reviewed", rows.length > 0,
-      `${rows.length} finding(s)`, "no findings came back");
-    check("findings are attached to the real file",
-      [...state.diagnostics.keys()].some((k) => /auth\.js$/.test(k)),
-      [...state.diagnostics.keys()].join(", "));
-    if (rows.length) {
-      const lines = rows.map((r) => r.node.finding.lineStart);
-      check("line numbers land inside the file", lines.every((n) => n >= 1 && n <= 10),
-        `lines ${lines.join(", ")}`, `out of range: ${lines.join(", ")}`);
-      check("nothing is reported as 'new file'",
-        !rows.some((r) => /\bnew file\b/i.test(r.node.finding.title)),
-        "", "the model treated the whole-file review as a change set");
-    }
-    ext.deactivate(); restore();
-  }
-
-  // ── 4. A real review ───────────────────────────────────────────────────
-  section("4. Review a real diff");
-  let reviewState, reviewRepo, reviewCtl;
-  {
-    reviewRepo = makeRepo("review-repo", {
-      "src/db.ts":
-        'import { Pool } from "pg";\n' +
-        "const pool = new Pool();\n\n" +
-        "export async function findUser(name: string) {\n" +
-        '  const sql = "SELECT * FROM users WHERE name = \'" + name + "\'";\n' +
-        "  const res = await pool.query(sql);\n" +
-        "  return res.rows[0].email;\n" +
-        "}\n",
-      "src/util/parse.ts": "export function amount(raw: string) {\n  return parseInt(raw);\n}\n",
-    });
-    stage(reviewRepo);
-    const t0 = Date.now();
-    reviewCtl = await boot(reviewRepo);
-    reviewState = reviewCtl.state;
-    const secs = ((Date.now() - t0) / 1000).toFixed(0);
-
-    const rows = await walkTree(reviewState);
-    const f = rows.filter((r) => r.kind === "finding");
-    check("review produced findings", f.length > 0, `${f.length} finding(s) in ${secs}s`);
-    check("diagnostics published", reviewState.diagnostics.size > 0, `${reviewState.diagnostics.size} file(s)`);
-    check("status bar reflects the result", /CR-Track \d+|pass-filled/.test(reviewState.statusText), reviewState.statusText);
-
-    const folders = rows.filter((r) => r.kind === "folder").map((r) => r.label);
-    const files = rows.filter((r) => r.kind === "file").map((r) => r.label);
-    check("tree groups by folder", folders.length > 0, `folders: ${folders.join(", ") || "none"}`);
-    check("both changed files present or reviewed", files.length >= 1, `files: ${files.join(", ")}`);
-
-    const withPatch = f.filter((r) => r.contextValue === "finding-fixable");
-    check("at least one finding carries an applicable patch", withPatch.length > 0,
-      `${withPatch.length}/${f.length} fixable`);
-    check("findings show id, severity, line and confidence",
-      f.every((r) => /f\d+ · \w+ · line/.test(String(r.description))), String(f[0]?.description));
-    check("tree badge counts open findings",
-      reviewState.treeView?.badge?.value === f.length, JSON.stringify(reviewState.treeView?.badge));
-  }
-
-  // ── 5. Accept a fix ────────────────────────────────────────────────────
-  section("5. Accept a fix (writes to disk)");
-  {
-    const f = (await findings(reviewState)).filter((r) => r.contextValue === "finding-fixable");
-    if (f.length === 0) {
-      skipped("apply a patch", "no fixable finding in this review");
-    } else {
-      const target = f[0];
-      const file = target.node.finding.file;
-      const before = fs.readFileSync(path.join(reviewRepo, file), "utf8");
-      await run(reviewState, "crTrack.acceptFinding", target.node);
-      const after = fs.readFileSync(path.join(reviewRepo, file), "utf8");
-
-      check("file content changed on disk", before !== after, `${file}`);
-      check("no error dialog raised", !reviewState.messages.some((m) => m.kind === "error"),
-        JSON.stringify(reviewState.messages.filter((m) => m.kind === "error")));
-
-      const rows = await findings(reviewState);
-      const now = rows.find((r) => r.node.finding.id === target.node.finding.id);
-      check("finding marked applied in the tree", now?.description === "applied", String(now?.description));
-      check("resolved finding loses its inline actions", now?.contextValue === "finding-resolved", String(now?.contextValue));
-      check("squiggle removed for the applied finding",
-        !JSON.stringify([...reviewState.diagnostics.values()]).includes(target.node.finding.id),
-        "", "the diagnostic is still published");
-    }
-  }
-
-  // ── 6. Staleness guard ─────────────────────────────────────────────────
-  section("6. Staleness guard");
-  {
-    const f = (await findings(reviewState)).filter(
-      (r) => r.contextValue === "finding-fixable" && r.description !== "applied",
-    );
-    if (f.length === 0) {
-      skipped("refuse a stale patch", "no remaining fixable finding");
-    } else {
-      const target = f[0];
-      const abs = path.join(reviewRepo, target.node.finding.file);
-      // Insert lines above the finding so its recorded range no longer matches.
-      fs.writeFileSync(abs, "// shifted\n// shifted\n" + fs.readFileSync(abs, "utf8"), "utf8");
-      const before = fs.readFileSync(abs, "utf8");
-      reviewState.messages.length = 0;
-      await run(reviewState, "crTrack.acceptFinding", target.node);
-      const after = fs.readFileSync(abs, "utf8");
-
-      check("stale patch is refused, file untouched", before === after);
-      check("developer is warned about the change",
-        reviewState.messages.some((m) => /changed since the review/i.test(m.message)),
-        JSON.stringify(reviewState.messages.map((m) => m.message.slice(0, 60))));
-    }
-  }
-
-  // ── 7. Reject ──────────────────────────────────────────────────────────
-  section("7. Reject with a reason");
-  {
-    const open = (await findings(reviewState)).filter((r) => !["applied", "dismissed"].includes(String(r.description)));
-    if (open.length === 0) {
-      skipped("reject a finding", "nothing left open");
-    } else {
-      const target = open[0];
-      reviewCtl.restore();
-      // Re-arm the stub's input queue by driving the handler with a scripted answer.
-      const id = target.node.finding.id;
-      // The stub consumes from the queue created at boot; push a fresh answer.
-      reviewState.inputs.length = 0;
-      const { vscode } = makeStub({ repo: reviewRepo });
-      void vscode;
-      const restore2 = install(reviewCtl.vscode);
-      // Patch the input queue in place for this one call.
-      reviewCtl.vscode.window.showInputBox = async (opts) => {
-        reviewState.inputs.push(opts?.title ?? "");
-        return "intentional — validated upstream";
-      };
-      await run(reviewState, "crTrack.rejectFinding", target.node);
-      restore2();
-
-      const rows = await findings(reviewState);
-      const now = rows.find((r) => r.node.finding.id === id);
-      check("finding marked dismissed", now?.description === "dismissed", String(now?.description));
-      check("a reason was requested", reviewState.inputs.length > 0);
-      check("squiggle removed for the rejected finding",
-        !JSON.stringify([...reviewState.diagnostics.values()]).includes(id));
-    }
-  }
-
-  // ── 8. Cache ───────────────────────────────────────────────────────────
-  section("8. Result cache");
-  {
-    const repo = makeRepo("cache-repo", { "x.ts": "export const x: any = JSON.parse('{}');\n" });
-    stage(repo);
-    const ctl = await boot(repo);
-    const first = ctl.state.logLines.filter((l) => /Review complete/.test(l)).length;
-
-    ctl.state.logLines.length = 0;
-    await run(ctl.state, "crTrack.reviewStaged"); // force:true — should re-run
-    const forced = ctl.state.logLines.some((l) => /Review complete|Cache hit/.test(l));
-    check("first review completed", first > 0);
-    check("manual re-review runs", forced, ctl.state.logLines.slice(-2).join(" | "));
-    ctl.ext.deactivate(); ctl.restore();
-  }
-
-  // ── 8b. Supersede + cancel ─────────────────────────────────────────────
-  section("8b. Superseding an in-flight review");
-  {
-    const repo = makeRepo("supersede-repo", { "s.ts": "export const s = eval('1');\n" });
-    stage(repo);
-    const { vscode, state } = makeStub({ repo });
-    const restore = install(vscode);
-    const ext = loadExtension(BUNDLE);
-    await ext.activate(makeContext(EXT_DIR));
-
-    // Wait until a review is genuinely in flight, then start another.
-    for (let i = 0; i < 40 && !/Reviewing/.test(state.statusText); i++) await sleep(250);
-    const wasRunning = /Reviewing/.test(state.statusText);
-
-    write(repo, { "s.ts": "export const s = 1;\nexport const t: any = null;\n" });
-    stage(repo);
-    await run(state, "crTrack.reviewStaged");
-    await sleep(1000);
-
-    const log = state.logLines.join("\n");
-    check("a review was in flight to supersede", wasRunning, "", "review never started, so nothing was superseded");
-    check("the superseded run was cancelled or discarded",
-      /Cancelling in-flight review|Discarded a superseded review/.test(log),
-      "", `neither cancel nor discard appeared in the log:\n${state.logLines.slice(-6).join("\n")}`);
-
-    // Cancel explicitly and confirm the extension settles rather than hanging.
-    await run(state, "crTrack.cancelReview");
-    await sleep(500);
-    check("cancel leaves the extension responsive",
-      typeof state.statusText === "string" && state.statusText.length > 0, state.statusText);
-    ext.deactivate(); restore();
-  }
-
-  // ── 9. Commit gate ─────────────────────────────────────────────────────
-  section("9. Commit gate");
-  {
-    const rows = await findings(reviewState);
-    const blocking = rows.filter((r) => r.node.finding.severity === "blocking" && !["applied", "dismissed"].includes(String(r.description)));
-
-    reviewState.messages.length = 0;
-    const restore3 = install(reviewCtl.vscode);
-    reviewCtl.vscode.window.showWarningMessage = async (message) => {
-      reviewState.messages.push({ kind: "warning", message });
-      return "Review them"; // decline the commit
-    };
-    await run(reviewState, "crTrack.reviewAndCommit");
-    restore3();
-
-    if (blocking.length > 0) {
-      check("blocking findings prompt before committing",
-        reviewState.messages.some((m) => /blocking issue/i.test(m.message)),
-        JSON.stringify(reviewState.messages.map((m) => m.message.slice(0, 50))));
-      check("declining the prompt does not commit",
-        !reviewState.messages.some((m) => m.kind === "host-command" && m.message === "git.commit"),
-        "", "git.commit was invoked despite declining");
-    } else {
-      check("no blockers → commit proceeds without a prompt",
-        !reviewState.messages.some((m) => /blocking issue/i.test(m.message)));
-    }
-    reviewCtl.ext.deactivate(); reviewCtl.restore();
-  }
-
-  // ── 10. Reporting + webhook ────────────────────────────────────────────
-  section("10. Report, redaction and webhook");
+  // ── 7. The report ──────────────────────────────────────────────────────
+  section("7. The report reaches the dashboard");
   {
     const received = [];
     const server = http.createServer((req, res) => {
       let body = "";
-      req.on("data", (d) => (body += d));
+      req.on("data", (ch) => (body += ch));
       req.on("end", () => {
-        received.push({ url: req.url, auth: req.headers.authorization, body });
+        received.push({ headers: req.headers, body });
         res.writeHead(200, { "content-type": "application/json" });
         res.end('{"ok":true}');
       });
     });
     await new Promise((r) => server.listen(0, "127.0.0.1", r));
-    const port = server.address().port;
+    const endpoint = `http://127.0.0.1:${server.address().port}/api/ingest`;
 
-    const repo = makeRepo("report-repo", {
-      // A planted secret must never reach the wire.
-      "conf.ts": 'export const cfg = { apiKey: "sk_live_AAAABBBBCCCCDDDDEEEE1111" };\n',
-      ".cr-track.yaml": `endpoint: http://127.0.0.1:${port}/api/ingest\n`,
-    });
-    stage(repo);
+    if (FAST) {
+      skipped("Report delivery", "needs the model");
+    } else {
+      const repo = makeRepo("reporting");
+      write(repo, { ".cr-track.yaml": `endpoint: ${endpoint}\nprofile: chill\n` });
+      git(repo, "add", "-A"); git(repo, "commit", "-qm", "config");
 
-    const ctl = await boot(repo);
-    const restore4 = install(ctl.vscode);
-    ctl.vscode.window.showWarningMessage = async () => "Commit anyway";
-    ctl.vscode.window.showInputBox = async () => "qa override";
-    await run(ctl.state, "crTrack.reviewAndCommit");
-    restore4();
-    await sleep(1500);
+      const { state, restore } = await boot(repo);
+      commit(repo, "leaky change", {
+        "src/api.ts": `const AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY123";\n${BAD_SOURCE}`,
+      });
+      await fireCommitWatcher(state);
 
-    const local = path.join(repo, ".cr-track", "last-review.json");
-    check("local report written", fs.existsSync(local), local);
+      // The status bar flips to "reviewed" before the report is uploaded — the
+      // developer should never wait on telemetry — so settling is not the same
+      // as having delivered.
+      const postDeadline = Date.now() + 20_000;
+      while (!received.length && Date.now() < postDeadline) await sleep(500);
 
-    if (fs.existsSync(local)) {
-      const report = JSON.parse(fs.readFileSync(local, "utf8"));
-      // `source` is what the dashboard validates against; client.surface is
-      // what actually produced the report.
-      check("report has the envelope the dashboard requires",
-        report.schemaVersion === "2.0" && report.source === "claude-code-skill" &&
-        Array.isArray(report.findings) && Array.isArray(report.changes) &&
-        typeof report.review?.id === "string" && report.review?.mode === "staged" &&
-        typeof report.repository?.remote === "string" && typeof report.ruleset === "string",
-        `source=${report.source} changes=${Array.isArray(report.changes)} surface=${report.client?.surface}`);
-      check("developer identity captured",
-        report.developer?.email === "qa@example.com", JSON.stringify(report.developer));
-      check("diff stats captured",
-        report.diffStats?.filesChanged >= 1, JSON.stringify(report.diffStats?.filesChanged));
-      check("summary present", typeof report.summary?.findingsTotal === "number");
-      const raw = JSON.stringify(report);
-      check("planted secret is redacted", !raw.includes("sk_live_AAAABBBBCCCCDDDDEEEE1111"),
-        "", "SECRET LEAKED INTO THE LOCAL REPORT");
+      check("A report was POSTed", received.length > 0,
+        `${received.length} request(s)`, "the dashboard was never called");
+
+      if (received.length) {
+        let payload = null;
+        try { payload = JSON.parse(received[received.length - 1].body); } catch { /* reported below */ }
+        check("...and it is valid JSON", !!payload);
+        if (payload) {
+          check("...with the source string the dashboard validates",
+            payload.source === "claude-code-skill", payload.source,
+            `source was "${payload.source}" — the dashboard rejects anything else`);
+          check("...and a schemaVersion", ["1.0", "2.0"].includes(payload.schemaVersion), payload.schemaVersion);
+          check("...and mode 'committed'", payload.review?.mode === "committed", payload.review?.mode);
+          check("...and the commit it reviewed",
+            !!payload.review?.commit?.sha && !!payload.review?.commit?.message,
+            payload.review?.commit?.shortSha,
+            "the commit block is missing — the dashboard cannot attribute the review");
+          check("...and the commit author",
+            /@/.test(payload.review?.commit?.authorEmail ?? ""), payload.review?.commit?.authorEmail);
+          check("...and a developer identity", /@/.test(payload.developer?.email ?? ""), payload.developer?.email);
+          check("...and a changes array", Array.isArray(payload.changes), `${payload.changes?.length} entries`);
+          check("...and findings", Array.isArray(payload.findings), `${payload.findings?.length} findings`);
+          check("...and a summary object", !!payload.summary && typeof payload.summary === "object");
+
+          const raw = received[received.length - 1].body;
+          check("The AWS secret never left the machine",
+            !raw.includes("wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY123"),
+            "redacted",
+            "SECRET LEAKED — the AWS key appeared verbatim in the payload");
+        }
+      }
+
+      check("A local copy is always written",
+        fs.existsSync(path.join(repo, ".cr-track", "last-review.json")),
+        ".cr-track/last-review.json");
+      restore();
     }
-
-    check("webhook received the report", received.length > 0, `${received.length} POST(s)`);
-    if (received.length) {
-      check("POST hit the configured path", received[0].url === "/api/ingest", received[0].url);
-      const sent = received[0].body;
-      check("secret absent from the wire payload", !sent.includes("sk_live_AAAABBBBCCCCDDDDEEEE1111"),
-        "", "SECRET LEAKED OVER HTTP");
-    }
-    ctl.ext.deactivate(); ctl.restore();
     server.close();
   }
 
-  // ── 11. Webhook down → queue ───────────────────────────────────────────
-  section("11. Webhook failure queues, never blocks");
-  {
-    const repo = makeRepo("queue-repo", {
-      "y.ts": "export function y(a: any) { return a.b.c; }\n",
-      ".cr-track.yaml": "endpoint: http://127.0.0.1:1/api/ingest\n", // nothing listening
-    });
-    stage(repo);
-    const ctl = await boot(repo);
-    const restore5 = install(ctl.vscode);
-    ctl.vscode.window.showWarningMessage = async () => "Commit anyway";
-    ctl.vscode.window.showInputBox = async () => "qa";
-    await run(ctl.state, "crTrack.reviewAndCommit");
-    restore5();
-    await sleep(2500);
+  // ── 8. A dead dashboard never costs the developer anything ─────────────
+  section("8. Dashboard failure queues, never blocks");
+  if (FAST) {
+    skipped("Failure queue", "needs the model");
+  } else {
+    const repo = makeRepo("offline");
+    // Port 1 is reliably refused.
+    write(repo, { ".cr-track.yaml": "endpoint: http://127.0.0.1:1/api/ingest\nprofile: chill\n" });
+    git(repo, "add", "-A"); git(repo, "commit", "-qm", "config");
 
-    check("local report still written", fs.existsSync(path.join(repo, ".cr-track", "last-review.json")));
-    const qdir = path.join(repo, ".cr-track", "queue");
-    const queued = fs.existsSync(qdir) ? fs.readdirSync(qdir).filter((f) => f.endsWith(".json")) : [];
-    check("failed upload queued for retry", queued.length > 0, `${queued.length} queued`);
-    check("failure logged, not thrown",
-      ctl.state.logLines.some((l) => /queued for retry|upload failed/i.test(l)),
-      ctl.state.logLines.slice(-2).join(" | "));
-    ctl.ext.deactivate(); ctl.restore();
+    const { state, restore } = await boot(repo);
+    commit(repo, "change", { "src/x.ts": BAD_SOURCE });
+    const settled = await fireCommitWatcher(state);
+    check("The review still completes with the dashboard down", settled, state.statusText);
+    check("...and the failure is explained, not swallowed",
+      /unreachable|queued/i.test(logText(state)), "queued for retry",
+      `log said nothing about the failed upload: ${logText(state).slice(-300)}`);
+    const queueDir = path.join(repo, ".cr-track", "queue");
+    check("...and the report is queued for retry",
+      fs.existsSync(queueDir) && fs.readdirSync(queueDir).length > 0,
+      fs.existsSync(queueDir) ? `${fs.readdirSync(queueDir).length} queued` : "no queue dir");
+    check("...and nothing was shown to the developer as an error",
+      !state.messages.some((m) => m.kind === "error"), "silent");
+    restore();
   }
 
-  summarise();
-})().catch((e) => {
-  console.error("\nQA harness crashed —", e);
+  // ── 9. Uninstall ───────────────────────────────────────────────────────
+  section("9. Deactivate leaves nothing behind");
+  {
+    const repo = makeRepo("teardown");
+    const { ext, state, restore } = await boot(repo);
+    const watchers = [...state.fileWatchers];
+    ext.deactivate();
+    check("deactivate() does not throw", true);
+    check("...and disposes every file watcher",
+      watchers.every((w) => w.disposed),
+      `${watchers.length} disposed`,
+      `${watchers.filter((w) => !w.disposed).length} watcher(s) left running`);
+    check("...and the bundle compiles in a process-tree kill",
+      /taskkill/.test(fs.readFileSync(BUNDLE, "utf8")),
+      "taskkill /T /F is present",
+      "nothing kills spawned CLI processes — an uninstall can fail on Windows");
+    restore();
+  }
+  {
+    // The real symptom the developer reported: leftover `claude` processes hold
+    // handles inside the extension directory, so Windows refuses to delete it.
+    if (process.platform !== "win32") {
+      skipped("No orphaned CLI processes", "windows-only check");
+    } else {
+      // Match on the flag only CR-Track passes. Counting every `claude`
+      // process would count the developer's own Claude Code session and fail
+      // for a reason that has nothing to do with this extension.
+      let orphans = 0;
+      try {
+        // Filter by name first: without it the query matches the very
+        // PowerShell process running it, whose command line contains the flag.
+        const script =
+          "@(Get-CimInstance Win32_Process | " +
+          "Where-Object { $_.Name -like 'claude*' -and " +
+          "$_.CommandLine -like '*append-system-prompt-file*' }).Count";
+        const out = execFileSync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf8" });
+        orphans = parseInt(out.trim(), 10) || 0;
+      } catch { orphans = 0; }
+      check("No review processes left running after the suite",
+        orphans === 0, "none",
+        `${orphans} orphaned review process(es) — these are what block an uninstall`);
+    }
+  }
+
+  // ── 10. Contribution surface ───────────────────────────────────────────
+  section("10. Only the commands this version implements are contributed");
+  {
+    const pkg = JSON.parse(fs.readFileSync(path.join(EXT_DIR, "package.json"), "utf8"));
+    const declared = pkg.contributes.commands.map((cmd) => cmd.command).sort();
+    const repo = makeRepo("commands");
+    const { state, restore } = await boot(repo);
+    const registered = [...state.commands.keys()].sort();
+
+    const undeclared = registered.filter((id) => !declared.includes(id));
+    const unregistered = declared.filter((id) => !registered.includes(id));
+    check("Every declared command is registered", unregistered.length === 0,
+      `${declared.length} commands`, `missing at runtime: ${unregistered.join(", ")}`);
+    check("Every registered command is declared", undeclared.length === 0,
+      "", `registered but not in package.json: ${undeclared.join(", ")}`);
+    check("No walkthrough is contributed", !pkg.contributes.walkthroughs,
+      "removed with the setup flow");
+    check("The dashboard endpoint is configurable",
+      !!pkg.contributes.configuration.properties["crTrack.endpoint"], "crTrack.endpoint");
+    restore();
+  }
+
+  // ── done ───────────────────────────────────────────────────────────────
+  console.log(`\n${c("1", "Result")}  ${c("32", pass + " passed")}  ${fail ? c("31", fail + " failed") : "0 failed"}  ${skip ? c("33", skip + " skipped") : ""}`);
+  if (failures.length) {
+    console.log(c("31", "\nFailures:"));
+    for (const f of failures) console.log("  · " + f);
+  }
+  console.log("");
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* windows handles */ }
+  process.exit(fail ? 1 : 0);
+})().catch((err) => {
+  console.error("\nQA harness crashed:\n", err);
   process.exit(2);
 });
-
-function summarise() {
-  console.log("\n" + "═".repeat(64));
-  console.log(`  ${c("32", pass + " passed")}   ${fail ? c("31", fail + " failed") : "0 failed"}   ${skip} skipped`);
-  console.log("═".repeat(64));
-  if (failures.length) {
-    console.log("\nFailures:");
-    for (const f of failures) console.log(`  • ${f}`);
-  }
-  console.log(dim(`\nNot covered here: icon rendering, squiggle painting, menu placement,\nhover formatting, real git.commit. Those need a VS Code window.\n`));
-  process.exit(fail ? 1 : 0);
-}

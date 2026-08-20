@@ -1,22 +1,17 @@
 /**
  * The Findings panel.
  *
- * A tree of folders → files → findings, with accept and reject on each row.
- * The Problems panel is a good place for squiggles but a bad place for a
- * decision: it has no notion of "I have dealt with this", and it interleaves
- * CR-Track's findings with every other linter's. This view exists so the
- * developer can work through a review in one place and see what they have
- * already decided.
- *
- * Resolved findings stay visible, marked. Rows that vanish the instant you
- * click them make it impossible to tell what you have done.
+ * A tree of folders → files → findings. The Problems panel is a good place for
+ * squiggles but a bad one for reading a recommendation: it truncates, and it
+ * interleaves CR-Track's findings with every other linter's. This view exists
+ * so the developer can read through what the last commit turned up in one
+ * place, with the full explanation on hover.
  */
 
 import * as vscode from "vscode";
 import type { Finding, Severity } from "@engine/types";
-import type { FixProvider, Outcome } from "./fixes";
 
-type Node = FolderNode | FileNode | FindingNode;
+export type Node = FolderNode | FileNode | FindingNode;
 
 interface FolderNode {
   kind: "folder";
@@ -61,46 +56,26 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
   private readonly view: vscode.TreeView<Node>;
   private readonly disposables: vscode.Disposable[] = [];
 
-  constructor(
-    private readonly repoRoot: string,
-    private readonly fixes: FixProvider,
-  ) {
+  constructor(private readonly repoRoot: string) {
     this.view = vscode.window.createTreeView("crTrack.findings", {
       treeDataProvider: this,
       showCollapseAll: true,
     });
     this.disposables.push(this.view, this.changed);
-    this.disposables.push(this.fixes.onDidChangeOutcomes(() => this.refresh()));
   }
 
   setFindings(findings: Finding[]): void {
     this.findings = findings;
     this.root = buildTree(findings);
-    this.refresh();
+    this.changed.fire(undefined);
+    this.view.badge = findings.length
+      ? { value: findings.length, tooltip: `${findings.length} recommendation(s)` }
+      : undefined;
+    this.view.title = findings.length ? `Findings (${findings.length})` : "Findings";
   }
 
   clear(): void {
     this.setFindings([]);
-  }
-
-  refresh(): void {
-    this.changed.fire(undefined);
-    this.updateBadge();
-  }
-
-  /** Every finding that has not been accepted or rejected yet. */
-  outstanding(): Finding[] {
-    return this.findings.filter((f) => !this.fixes.outcomeFor(f.id));
-  }
-
-  private updateBadge(): void {
-    const open = this.outstanding().length;
-    const blocking = this.outstanding().filter((f) => f.severity === "blocking").length;
-    this.view.badge = open ? { value: open, tooltip: `${open} open finding(s)` } : undefined;
-    this.view.title = this.findings.length
-      ? `Findings (${this.findings.length - open}/${this.findings.length} resolved)`
-      : "Findings";
-    void vscode.commands.executeCommand("setContext", "crTrack.hasBlocking", blocking > 0);
   }
 
   getChildren(node?: Node): Node[] {
@@ -130,45 +105,28 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
       const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Expanded);
       item.resourceUri = vscode.Uri.joinPath(vscode.Uri.file(this.repoRoot), node.path);
       item.iconPath = vscode.ThemeIcon.File;
-      const open = node.findings.filter((f) => !this.fixes.outcomeFor(f.id)).length;
-      item.description = open === node.findings.length
-        ? `${node.findings.length}`
-        : `${open} open · ${node.findings.length} total`;
-      item.contextValue = open > 0 ? "file-open" : "file";
+      item.description = `${node.findings.length}`;
+      item.contextValue = "file";
       item.tooltip = node.path;
       return item;
     }
 
-    return this.findingItem(node.finding);
+    return this.findingItem(node);
   }
 
-  private findingItem(f: Finding): vscode.TreeItem {
-    const outcome = this.fixes.outcomeFor(f.id);
+  private findingItem(node: FindingNode): vscode.TreeItem {
+    const f = node.finding;
     const item = new vscode.TreeItem(f.title, vscode.TreeItemCollapsibleState.None);
+    const icon = SEVERITY_ICON[f.severity] ?? SEVERITY_ICON.nit;
 
-    item.description = describe(f, outcome?.outcome);
-    item.tooltip = tooltipFor(f, outcome);
-
-    if (outcome) {
-      item.iconPath = new vscode.ThemeIcon(
-        outcome.outcome === "applied" ? "check" : "circle-slash",
-        new vscode.ThemeColor(
-          outcome.outcome === "applied" ? "charts.green" : "disabledForeground",
-        ),
-      );
-      // Nothing left to do with it, so no inline actions.
-      item.contextValue = "finding-resolved";
-    } else {
-      const icon = SEVERITY_ICON[f.severity] ?? SEVERITY_ICON.nit;
-      item.iconPath = new vscode.ThemeIcon(icon.id, new vscode.ThemeColor(icon.color));
-      // Accept is only offered when there is actually a patch to apply.
-      item.contextValue = f.fix ? "finding-fixable" : "finding";
-    }
-
+    item.description = describe(f);
+    item.tooltip = tooltipFor(f);
+    item.iconPath = new vscode.ThemeIcon(icon.id, new vscode.ThemeColor(icon.color));
+    item.contextValue = "finding";
     item.command = {
       command: "crTrack.revealFinding",
       title: "Go to finding",
-      arguments: [f],
+      arguments: [node],
     };
     return item;
   }
@@ -178,38 +136,24 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
   }
 }
 
-function describe(f: Finding, outcome?: Outcome): string {
-  if (outcome === "applied") return "applied";
-  if (outcome === "dismissed") return "dismissed";
-  const confidence = Math.round((f.confidence ?? 0) * 100);
+function describe(f: Finding): string {
   const line = f.lineStart === f.lineEnd ? `${f.lineStart}` : `${f.lineStart}-${f.lineEnd}`;
-  return `${f.id} · ${f.severity} · line ${line} · ${confidence}%`;
+  return `${f.severity} · line ${line}`;
 }
 
-function tooltipFor(
-  f: Finding,
-  outcome?: { outcome: Outcome; reason?: string },
-): vscode.MarkdownString {
+function tooltipFor(f: Finding): vscode.MarkdownString {
   const md = new vscode.MarkdownString(undefined, true);
   md.supportThemeIcons = true;
   md.appendMarkdown(`**${escapeMd(f.title)}**\n\n`);
   md.appendMarkdown(
-    `$(circle-filled) ${f.severity} · ${f.category} · ${Math.round((f.confidence ?? 0) * 100)}% confidence\n\n`,
+    `$(circle-filled) ${f.severity} · ${f.category} · ` +
+      `${Math.round((f.confidence ?? 0) * 100)}% confidence\n\n`,
   );
   md.appendMarkdown(`${escapeMd(f.description)}\n\n`);
-  md.appendMarkdown(`**Suggested**\n\n${escapeMd(f.suggestion)}\n\n`);
-
+  md.appendMarkdown(`**Suggested**\n\n${escapeMd(f.suggestion)}\n`);
   if (f.fix) {
-    md.appendMarkdown(`---\n\n$(check) A patch is available — accept to apply it.\n\n`);
+    md.appendMarkdown(`\n---\n\n`);
     md.appendCodeblock(f.fix.newText, "");
-  } else {
-    md.appendMarkdown(`---\n\n$(info) No automatic patch; this one needs a human.\n\n`);
-  }
-
-  if (outcome) {
-    md.appendMarkdown(
-      `\n\n**${outcome.outcome}**${outcome.reason ? ` — ${escapeMd(outcome.reason)}` : ""}`,
-    );
   }
   return md;
 }
@@ -249,7 +193,7 @@ export function buildTree(findings: Finding[]): Node[] {
     node.files.set(fileName, list);
   }
 
-  const convert = (draft: Draft, labelSoFar: string): Node[] => {
+  const convert = (draft: Draft): Node[] => {
     const out: Node[] = [];
 
     for (const [name, child] of [...draft.folders].sort(([a], [b]) => a.localeCompare(b))) {
@@ -261,12 +205,7 @@ export function buildTree(findings: Finding[]): Node[] {
         label = `${label}/${childName}`;
         cursor = only;
       }
-      out.push({
-        kind: "folder",
-        label,
-        path: cursor.path,
-        children: convert(cursor, label),
-      });
+      out.push({ kind: "folder", label, path: cursor.path, children: convert(cursor) });
     }
 
     for (const [name, group] of [...draft.files].sort(([a], [b]) => a.localeCompare(b))) {
@@ -276,7 +215,7 @@ export function buildTree(findings: Finding[]): Node[] {
     return out;
   };
 
-  return convert(root, "");
+  return convert(root);
 }
 
 function join(a: string, b: string): string {

@@ -1,8 +1,12 @@
-/** The status bar item — the only always-visible surface. */
+/**
+ * The status bar item — the only always-visible surface.
+ *
+ * Four states, and each one says in its *text* what is going on. A tooltip only
+ * helps someone who already suspects the extension is working; the people who
+ * report it as broken never hover.
+ */
 
 import * as vscode from "vscode";
-import type { State } from "./orchestrator";
-import { summarize } from "@engine/render";
 
 export class StatusBar implements vscode.Disposable {
   private readonly item: vscode.StatusBarItem;
@@ -10,130 +14,56 @@ export class StatusBar implements vscode.Disposable {
   constructor() {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     this.item.name = "CR-Track";
-    this.item.command = "crTrack.reviewStaged";
-    this.dormant("starting…");
+    this.dormant("starting");
     this.item.show();
   }
 
-  update(state: State): void {
-    switch (state.kind) {
-      case "idle":
-        this.item.text = "$(shield) CR-Track";
-        this.item.tooltip = "Nothing to review — the working tree is clean.";
-        this.item.backgroundColor = undefined;
-        this.item.command = "crTrack.reviewStaged";
-        break;
-
-      // Spelled out in the status bar text, not just the tooltip. "Nothing is
-      // staged" is the single most likely reason someone thinks the extension
-      // is broken, and a tooltip only helps people who already suspect it.
-      case "nothing-staged":
-        this.item.text = `$(shield) CR-Track · nothing staged`;
-        this.item.tooltip =
-          `${state.unstagedFiles} file(s) changed but not staged.\n` +
-          `CR-Track reviews staged changes — run \`git add\`, or click to review ` +
-          `the working tree anyway.`;
-        this.item.backgroundColor = undefined;
-        this.item.command = "crTrack.reviewWorkingTree";
-        break;
-
-      case "running":
-        this.item.text = "$(sync~spin) Reviewing…";
-        this.item.tooltip = "CR-Track is reviewing your staged changes. Click to cancel.";
-        this.item.backgroundColor = undefined;
-        this.item.command = "crTrack.cancelReview";
-        break;
-
-      case "done": {
-        const { findings } = state.outcome;
-        const counts = summarize(findings);
-        this.item.command = "workbench.actions.view.problems";
-        if (findings.length === 0) {
-          this.item.text = "$(pass-filled) CR-Track";
-          this.item.tooltip = "No findings on the staged changes.";
-          this.item.backgroundColor = undefined;
-        } else {
-          const parts: string[] = [];
-          if (counts.blocking) parts.push(`${counts.blocking} blocking`);
-          if (counts.important) parts.push(`${counts.important} important`);
-          const rest = counts.nit + counts.suggestion;
-          if (rest) parts.push(`${rest} minor`);
-          this.item.text = `$(warning) CR-Track ${findings.length}`;
-          this.item.tooltip = `${parts.join(", ")}. Click to open the Problems panel.`;
-          this.item.backgroundColor = counts.blocking
-            ? new vscode.ThemeColor("statusBarItem.errorBackground")
-            : undefined;
-        }
-        break;
-      }
-
-      case "failed":
-        this.item.text = "$(circle-slash) CR-Track";
-        this.item.tooltip = `Review failed: ${state.message}\nClick to open the log.`;
-        this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
-        this.item.command = "crTrack.showOutput";
-        break;
-    }
-  }
-
-  /** A review is running that is not driven by the orchestrator's state. */
-  busy(what: string): void {
-    this.item.text = "$(sync~spin) Reviewing…";
-    this.item.tooltip = what;
+  /** Armed and waiting for a commit. */
+  idle(what: string): void {
+    this.item.text = "$(shield) CR-Track";
+    this.item.tooltip = `CR-Track is ${what}.\nEvery new commit is reviewed automatically.`;
     this.item.backgroundColor = undefined;
-    this.item.command = "crTrack.menu";
+    this.item.command = "crTrack.showOutput";
   }
 
-  /** Outcome of a file review, which has no orchestrator state behind it. */
-  fileReview(findings: { severity: string }[], label: string): void {
-    const blocking = findings.filter((f) => f.severity === "blocking").length;
-    this.item.command = "crTrack.focusView";
-    if (findings.length === 0) {
+  busy(what: string): void {
+    this.item.text = "$(sync~spin) CR-Track reviewing…";
+    this.item.tooltip = `${what}.\nClick to watch the log.`;
+    this.item.backgroundColor = undefined;
+    this.item.command = "crTrack.showOutput";
+  }
+
+  reviewed(count: number, shortSha: string): void {
+    if (count === 0) {
       this.item.text = "$(pass-filled) CR-Track";
-      this.item.tooltip = `No findings in ${label}.`;
+      this.item.tooltip = `No findings on ${shortSha}. Nice commit.`;
       this.item.backgroundColor = undefined;
+      this.item.command = "crTrack.showOutput";
       return;
     }
-    this.item.text = `$(warning) CR-Track ${findings.length}`;
-    this.item.tooltip = `${findings.length} finding(s) in ${label}. Click to open the panel.`;
-    this.item.backgroundColor = blocking
-      ? new vscode.ThemeColor("statusBarItem.errorBackground")
-      : undefined;
+    this.item.text = `$(warning) CR-Track ${count}`;
+    this.item.tooltip = `${count} recommendation(s) on ${shortSha}.\nClick to open the panel.`;
+    this.item.backgroundColor = undefined;
+    this.item.command = "crTrack.findings.focus";
   }
 
   failed(message: string): void {
     this.item.text = "$(circle-slash) CR-Track";
-    this.item.tooltip = `Review failed: ${message}
-Click for options.`;
+    this.item.tooltip = `Review failed: ${message}\nClick to open the log.`;
     this.item.backgroundColor = new vscode.ThemeColor("statusBarItem.warningBackground");
-    this.item.command = "crTrack.menu";
+    this.item.command = "crTrack.showOutput";
   }
 
   /**
-   * Running, but without everything. Distinct from dormant: something works.
-   * Reporting a partial capability as "inactive" is how a usable tool gets
-   * written off as broken.
-   */
-  limited(reason: string): void {
-    this.item.text = "$(shield) CR-Track · files only";
-    this.item.tooltip =
-      `${reason}.
-Right-click a file or folder to review it, or click here for options.`;
-    this.item.backgroundColor = undefined;
-    this.item.command = "crTrack.menu";
-  }
-
-  /**
-   * Installed but not operating. Says so in the text rather than only on hover,
-   * and still opens the menu — an inactive extension the user cannot act on is
+   * Installed but not operating. Says so in the text, and offers the one
+   * command that explains why — an inactive extension the user cannot act on is
    * the worst of both worlds.
    */
   dormant(reason: string): void {
     this.item.text = "$(shield) CR-Track · inactive";
-    this.item.tooltip = `CR-Track is inactive — ${reason}.
-Click for options, including Diagnose.`;
+    this.item.tooltip = `CR-Track is inactive — ${reason}.\nClick to run Diagnose.`;
     this.item.backgroundColor = undefined;
-    this.item.command = "crTrack.menu";
+    this.item.command = "crTrack.diagnose";
   }
 
   dispose(): void {

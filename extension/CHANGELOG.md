@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.4.0
+
+**CR-Track now does one thing: it reviews your commits.**
+
+The trigger was wrong. Earlier versions reviewed *staged* changes, so the review
+fired on `git add` and had usually been forgotten by the time anyone committed —
+and a developer who never stages incrementally saw nothing at all. It now
+triggers on the commit itself, which is the event the dashboard measures and the
+one developers actually notice.
+
+- **Reviews the commit that just landed.** The reflog is watched for a new HEAD;
+  the reflog action word distinguishes a commit from a checkout, reset or
+  rebase, so switching branches no longer hands the model an enormous unrelated
+  diff.
+- **Merges are skipped.** A merge's diff is everything both branches did, which
+  says nothing about what this developer wrote.
+- **Documentation-only commits are skipped.** Markdown, JSON, YAML, lockfiles,
+  `dist/`, `node_modules/` and generated files no longer consume a review.
+- **The commit travels with the report** — sha, message, author and timestamp —
+  so the dashboard can attribute a review without guessing from a branch name.
+- **A dashboard is configured out of the box.** `crTrack.endpoint` now defaults
+  to the CR-Track dashboard, so a fresh install reports without setup. A
+  repository's `.cr-track.yaml` still overrides it.
+
+**The uninstall failure is fixed.** Killing a review left its child processes
+running: on Windows `SIGTERM` is advisory and there are no process groups, so
+`claude.cmd`'s children survived, held handles inside the extension directory,
+and Windows then refused to remove it. Every child is now tracked and killed as
+a tree (`taskkill /T /F`), and closing the window kills anything still running.
+Machines that hit this will have orphaned `claude` processes from earlier
+versions; end those once, and it will not recur.
+
+**Everything that was not the above is gone**: file and folder review, the
+working-tree mode, the commit gate, accept/reject on findings, the setup
+walkthrough and the seventeen commands that came with them. Each was one more
+thing to be broken on someone else's machine, and none of them served the
+trigger the product is about. Five commands remain: Review the Last Commit,
+Clear Findings, Show Log, Diagnose, Go to Finding.
+
 ## 0.3.0
 
 **Setup now explains itself instead of failing quietly.**

@@ -318,3 +318,103 @@ export async function collectStats(repo: RepoContext, scope: Scope): Promise<Dif
 
   return { filesChanged: files.length, linesAdded, linesRemoved, files };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// Commits
+//
+// The product trigger is a commit, not a staging event. Everything below
+// exists to answer "has a new commit just landed, and what was in it".
+
+export interface CommitInfo {
+  sha: string;
+  shortSha: string;
+  subject: string;
+  authorName: string;
+  authorEmail: string;
+  authoredAt: string;
+  /** Parent count: 0 for the first commit, 2+ for a merge. */
+  parents: number;
+}
+
+/** The SHA at HEAD, or "" when the repository has no commits yet. */
+export async function headSha(repoRoot: string): Promise<string> {
+  return gitSoft(repoRoot, ["rev-parse", "HEAD"]);
+}
+
+/**
+ * Did the most recent reflog entry come from a commit?
+ *
+ * HEAD moves for checkouts, resets, rebases and merges too. Reviewing after a
+ * branch switch would hand the model an enormous unrelated diff, so the reflog
+ * action is the discriminator rather than "the SHA changed".
+ */
+export async function lastRefAction(repoRoot: string): Promise<string> {
+  const line = await gitSoft(repoRoot, ["reflog", "-1", "--format=%gs"]);
+  return line.split(":")[0]?.trim().toLowerCase() ?? "";
+}
+
+export async function readCommit(repoRoot: string, sha: string): Promise<CommitInfo | null> {
+  const out = await gitSoft(repoRoot, [
+    "show", "-s", "--format=%H%x1f%h%x1f%s%x1f%an%x1f%ae%x1f%aI%x1f%P", sha,
+  ]);
+  const parts = out.split("\x1f");
+  if (parts.length < 7 || !parts[0]) return null;
+  return {
+    sha: parts[0],
+    shortSha: parts[1] ?? parts[0].slice(0, 7),
+    subject: parts[2] ?? "",
+    authorName: parts[3] ?? "",
+    authorEmail: parts[4] ?? "",
+    authoredAt: parts[5] ?? "",
+    parents: (parts[6] ?? "").trim() ? (parts[6] ?? "").trim().split(/\s+/).length : 0,
+  };
+}
+
+/** The diff a commit introduced, limited to the given paths when supplied. */
+export async function commitDiff(
+  repoRoot: string,
+  sha: string,
+  paths: string[] = [],
+): Promise<string> {
+  const args = ["show", "--format=", "--unified=3", sha];
+  if (paths.length) args.push("--", ...paths);
+  const r = await run(GIT, args, { cwd: repoRoot, timeoutMs: 60_000 });
+  return r.code === 0 ? r.stdout : "";
+}
+
+/** Per-file stats for a commit, matching the shape used for staged reviews. */
+export async function commitStats(repoRoot: string, sha: string): Promise<DiffStats> {
+  const numstat = await gitSoft(repoRoot, ["show", "--numstat", "--format=", sha]);
+  const namestatus = await gitSoft(repoRoot, ["show", "--name-status", "--format=", sha]);
+
+  const typeByPath = new Map<string, ChangeType>();
+  for (const line of namestatus.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const cols = line.split("\t");
+    const code = (cols[0] ?? "").charAt(0);
+    const p = cols.length >= 3 ? cols[2] : cols[1];
+    if (p) typeByPath.set(p, CHANGE_TYPES[code] ?? "modified");
+  }
+
+  const files: FileChange[] = [];
+  let linesAdded = 0;
+  let linesRemoved = 0;
+  for (const line of numstat.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const [a, d, ...rest] = line.split("\t");
+    const p = rest[rest.length - 1];
+    if (!p) continue;
+    const added = a === "-" ? 0 : parseInt(a ?? "0", 10) || 0;
+    const removed = d === "-" ? 0 : parseInt(d ?? "0", 10) || 0;
+    linesAdded += added;
+    linesRemoved += removed;
+    files.push({
+      path: p,
+      language: languageFor(p),
+      linesAdded: added,
+      linesRemoved: removed,
+      changeType: typeByPath.get(p) ?? "modified",
+    });
+  }
+  return { filesChanged: files.length, linesAdded, linesRemoved, files };
+}

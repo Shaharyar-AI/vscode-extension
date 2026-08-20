@@ -90,3 +90,40 @@ export function guidesFor(paths: string[]): string[] {
   }
   return [...guides].sort();
 }
+
+/**
+ * Languages that are documentation or data rather than code.
+ *
+ * A README tweak or a lockfile bump is not something to hand a reviewer: there
+ * is no logic to be wrong about, and burning a review on one teaches the
+ * developer that CR-Track fires at random.
+ */
+const NOT_CODE = new Set(["Markdown", "JSON", "YAML"]);
+
+/** Paths that are checked in but nobody writes by hand. */
+const GENERATED = [
+  /(^|\/)node_modules\//,
+  /(^|\/)dist\//,
+  /(^|\/)build\//,
+  /(^|\/)out\//,
+  /(^|\/)vendor\//,
+  /(^|\/)__snapshots__\//,
+  /(^|\/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Cargo\.lock|go\.sum)$/,
+  /\.min\.(js|css)$/,
+  /\.(g|generated)\.(ts|js|py|go|cs)$/,
+];
+
+/**
+ * Is this a file worth spending a review on?
+ *
+ * Deliberately stricter than `languageFor`, which still names Markdown and JSON
+ * so reports can describe a change set accurately.
+ */
+export function isReviewableCode(path: string): boolean {
+  // Git always reports forward slashes; a caller passing a Windows path should
+  // not get a different answer.
+  const normalized = path.split("\\").join("/");
+  if (GENERATED.some((re) => re.test(normalized))) return false;
+  const lang = languageFor(normalized);
+  return lang !== null && !NOT_CODE.has(lang);
+}

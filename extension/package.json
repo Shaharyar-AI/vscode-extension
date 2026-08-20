@@ -1,8 +1,8 @@
 {
   "name": "cr-track",
   "displayName": "CR-Track",
-  "description": "Reviews your staged changes with Claude before you commit, and reports the outcome.",
-  "version": "0.3.0",
+  "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
+  "version": "0.4.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -19,7 +19,7 @@
     "claude",
     "ai",
     "git",
-    "pre-commit",
+    "commit",
     "static analysis"
   ],
   "galleryBanner": {
@@ -41,87 +41,22 @@
   "contributes": {
     "commands": [
       {
-        "command": "crTrack.reviewStaged",
-        "title": "Review Staged Changes",
+        "command": "crTrack.reviewLastCommit",
+        "title": "Review the Last Commit",
         "category": "CR-Track",
-        "icon": "$(search-fuzzy)"
-      },
-      {
-        "command": "crTrack.reviewAndCommit",
-        "title": "Review & Commit",
-        "category": "CR-Track",
-        "icon": "$(check-all)"
+        "icon": "$(git-commit)"
       },
       {
         "command": "crTrack.clearFindings",
         "title": "Clear Findings",
-        "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.showOutput",
-        "title": "Show Log",
-        "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.cancelReview",
-        "title": "Cancel Running Review",
-        "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.applyFix",
-        "title": "Apply Fix",
-        "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.dismissFinding",
-        "title": "Dismiss Finding",
-        "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.copySuggestion",
-        "title": "Copy Suggestion",
-        "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.acceptFinding",
-        "title": "Accept — apply this fix",
-        "category": "CR-Track",
-        "icon": "$(check)"
-      },
-      {
-        "command": "crTrack.rejectFinding",
-        "title": "Reject — dismiss with a reason",
-        "category": "CR-Track",
-        "icon": "$(close)"
-      },
-      {
-        "command": "crTrack.acceptAll",
-        "title": "Accept All Fixes",
-        "category": "CR-Track",
-        "icon": "$(check-all)"
-      },
-      {
-        "command": "crTrack.rejectAll",
-        "title": "Reject All Findings",
         "category": "CR-Track",
         "icon": "$(clear-all)"
       },
       {
-        "command": "crTrack.revealFinding",
-        "title": "Go to Finding",
-        "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.reviewWorkingTree",
-        "title": "Review Working Tree (staged + unstaged)",
+        "command": "crTrack.showOutput",
+        "title": "Show Log",
         "category": "CR-Track",
-        "icon": "$(git-compare)"
-      },
-      {
-        "command": "crTrack.restart",
-        "title": "Restart",
-        "category": "CR-Track",
-        "icon": "$(refresh)"
+        "icon": "$(output)"
       },
       {
         "command": "crTrack.diagnose",
@@ -130,50 +65,9 @@
         "icon": "$(pulse)"
       },
       {
-        "command": "crTrack.menu",
-        "title": "Open Menu",
-        "category": "CR-Track",
-        "icon": "$(shield)"
-      },
-      {
-        "command": "crTrack.focusView",
-        "title": "Open Findings Panel",
+        "command": "crTrack.revealFinding",
+        "title": "Go to Finding",
         "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.openSettings",
-        "title": "Open Settings",
-        "category": "CR-Track"
-      },
-      {
-        "command": "crTrack.initRepository",
-        "title": "Initialize Repository (git init)",
-        "category": "CR-Track",
-        "icon": "$(repo)"
-      },
-      {
-        "command": "crTrack.reviewFile",
-        "title": "Review This File",
-        "category": "CR-Track",
-        "icon": "$(file-code)"
-      },
-      {
-        "command": "crTrack.reviewFolder",
-        "title": "Review Selected Files",
-        "category": "CR-Track",
-        "icon": "$(folder)"
-      },
-      {
-        "command": "crTrack.checkSetup",
-        "title": "Check Setup",
-        "category": "CR-Track",
-        "icon": "$(checklist)"
-      },
-      {
-        "command": "crTrack.openWalkthrough",
-        "title": "Open Setup Guide",
-        "category": "CR-Track",
-        "icon": "$(book)"
       }
     ],
     "viewsContainers": {
@@ -198,58 +92,15 @@
     "viewsWelcome": [
       {
         "view": "crTrack.findings",
-        "when": "crTrack.noRepo",
-        "contents": "This folder is not a git repository.\n\nStaged review and the commit gate need one — but you can still review files directly.\n\n[Review the current file](command:crTrack.reviewFile)\n\n[Initialise a repository here](command:crTrack.initRepository)\n\n[Diagnose](command:crTrack.diagnose)"
-      },
-      {
-        "view": "crTrack.findings",
-        "when": "crTrack.nothingStaged && !crTrack.noRepo",
-        "contents": "Nothing is staged.\n\nCR-Track reviews your **staged** changes, so it is waiting for a `git add`.\n\n[Stage all changes](command:git.stageAll)\n\n[Review working tree instead](command:crTrack.reviewWorkingTree)"
-      },
-      {
-        "view": "crTrack.findings",
-        "when": "!crTrack.nothingStaged && !crTrack.noRepo",
-        "contents": "No review yet.\n\nStage some changes and CR-Track reviews them automatically, or run one now.\n\n[Review staged changes](command:crTrack.reviewStaged)\n\n[Diagnose](command:crTrack.diagnose)"
+        "contents": "No review yet.\n\nCR-Track reviews each commit as you make it, then reports the result to your dashboard. Commit something and the findings appear here.\n\n[Review the last commit now](command:crTrack.reviewLastCommit)\n\n[Diagnose](command:crTrack.diagnose)"
       }
     ],
     "menus": {
-      "scm/title": [
-        {
-          "command": "crTrack.reviewAndCommit",
-          "when": "scmProvider == git",
-          "group": "navigation@1"
-        },
-        {
-          "command": "crTrack.reviewStaged",
-          "when": "scmProvider == git",
-          "group": "inline@9"
-        }
-      ],
       "view/title": [
         {
-          "command": "crTrack.reviewFile",
-          "when": "view == crTrack.findings",
-          "group": "navigation@0"
-        },
-        {
-          "command": "crTrack.reviewStaged",
+          "command": "crTrack.reviewLastCommit",
           "when": "view == crTrack.findings",
           "group": "navigation@1"
-        },
-        {
-          "command": "crTrack.reviewWorkingTree",
-          "when": "view == crTrack.findings",
-          "group": "navigation@2"
-        },
-        {
-          "command": "crTrack.acceptAll",
-          "when": "view == crTrack.findings",
-          "group": "navigation@2"
-        },
-        {
-          "command": "crTrack.rejectAll",
-          "when": "view == crTrack.findings",
-          "group": "navigation@3"
         },
         {
           "command": "crTrack.clearFindings",
@@ -267,73 +118,10 @@
           "group": "overflow@3"
         }
       ],
-      "view/item/context": [
-        {
-          "command": "crTrack.acceptFinding",
-          "when": "view == crTrack.findings && viewItem == finding-fixable",
-          "group": "inline@1"
-        },
-        {
-          "command": "crTrack.rejectFinding",
-          "when": "view == crTrack.findings && viewItem =~ /^finding($|-fixable)/",
-          "group": "inline@2"
-        },
-        {
-          "command": "crTrack.copySuggestion",
-          "when": "view == crTrack.findings && viewItem =~ /^finding/",
-          "group": "context@1"
-        }
-      ],
       "commandPalette": [
-        {
-          "command": "crTrack.applyFix",
-          "when": "false"
-        },
-        {
-          "command": "crTrack.dismissFinding",
-          "when": "false"
-        },
-        {
-          "command": "crTrack.copySuggestion",
-          "when": "false"
-        },
-        {
-          "command": "crTrack.acceptFinding",
-          "when": "false"
-        },
-        {
-          "command": "crTrack.rejectFinding",
-          "when": "false"
-        },
         {
           "command": "crTrack.revealFinding",
           "when": "false"
-        }
-      ],
-      "explorer/context": [
-        {
-          "command": "crTrack.reviewFolder",
-          "when": "explorerResourceIsFolder",
-          "group": "7_modification@1"
-        },
-        {
-          "command": "crTrack.reviewFile",
-          "when": "!explorerResourceIsFolder && resourceScheme == file",
-          "group": "7_modification@1"
-        }
-      ],
-      "editor/context": [
-        {
-          "command": "crTrack.reviewFile",
-          "when": "resourceScheme == file",
-          "group": "1_modification@9"
-        }
-      ],
-      "editor/title/context": [
-        {
-          "command": "crTrack.reviewFile",
-          "when": "resourceScheme == file",
-          "group": "1_modification@9"
         }
       ]
     },
@@ -343,12 +131,22 @@
         "crTrack.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Review staged changes automatically as you stage them."
+          "description": "Review each commit automatically as it is made."
+        },
+        "crTrack.endpoint": {
+          "type": "string",
+          "default": "https://cr-track-dashboard.vercel.app/api/ingest",
+          "description": "Dashboard ingest URL for review reports. A repository's .cr-track.yaml `endpoint` overrides this. Clear it to keep reports on disk only."
         },
         "crTrack.claudePath": {
           "type": "string",
           "default": "",
           "description": "Absolute path to the Claude CLI. Leave empty to discover it automatically (PATH, then common install locations)."
+        },
+        "crTrack.gitPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the git executable. Leave empty to use VS Code's git.path, then PATH, then the usual install locations."
         },
         "crTrack.model": {
           "type": "string",
@@ -393,91 +191,13 @@
           "default": "nit",
           "description": "Drop findings below this severity."
         },
-        "crTrack.debounceMs": {
-          "type": "number",
-          "default": 2000,
-          "description": "How long to wait for the git index to settle before reviewing."
-        },
         "crTrack.timeoutSeconds": {
           "type": "number",
           "default": 300,
           "description": "Abandon a review that runs longer than this."
-        },
-        "crTrack.blockCommitOnBlocking": {
-          "type": "boolean",
-          "default": true,
-          "description": "Ask for confirmation before committing when there are blocking findings. Never blocks outright — there is always an override."
-        },
-        "crTrack.endpoint": {
-          "type": "string",
-          "default": "",
-          "description": "Dashboard ingest URL for review reports. A repository's .cr-track.yaml `endpoint` overrides this. Leave empty to keep reports on disk only."
-        },
-        "crTrack.gitPath": {
-          "type": "string",
-          "default": "",
-          "description": "Absolute path to the git executable. Leave empty to use VS Code's git.path, then PATH, then the usual install locations."
         }
       }
-    },
-    "walkthroughs": [
-      {
-        "id": "crTrackSetup",
-        "title": "Set up CR-Track",
-        "description": "Two things to check, then your first review. Takes about a minute.",
-        "steps": [
-          {
-            "id": "cli",
-            "title": "Install and sign in to the Claude CLI",
-            "description": "CR-Track drives the Claude CLI to do the reviewing, so it has to exist on this machine.\n\n```\nnpm i -g @anthropic-ai/claude-code\nclaude\n```\n\n[Check now](command:crTrack.checkSetup)",
-            "media": {
-              "markdown": "media/step-cli.md",
-              "altText": "Installing the Claude CLI"
-            },
-            "completionEvents": [
-              "onContext:crTrack.cliReady"
-            ]
-          },
-          {
-            "id": "repo",
-            "title": "Open a git repository (optional)",
-            "description": "With a repository you get automatic review of staged changes and a check before commit. Without one, file review still works.\n\n[Check now](command:crTrack.checkSetup)",
-            "media": {
-              "markdown": "media/step-repo.md",
-              "altText": "Git repository"
-            },
-            "completionEvents": [
-              "onContext:crTrack.repoReady"
-            ]
-          },
-          {
-            "id": "first",
-            "title": "Run your first review",
-            "description": "Stage a change and wait a couple of seconds, or right-click any source file.\n\n[Review the current file](command:crTrack.reviewFile)",
-            "media": {
-              "markdown": "media/step-review.md",
-              "altText": "Running a review"
-            },
-            "completionEvents": [
-              "onCommand:crTrack.reviewFile",
-              "onCommand:crTrack.reviewStaged"
-            ]
-          },
-          {
-            "id": "stuck",
-            "title": "If anything looks wrong",
-            "description": "One command prints everything: which git and Claude CLI were found, whether this folder is a repository, and where the guides came from.\n\n[Diagnose](command:crTrack.diagnose)",
-            "media": {
-              "markdown": "media/step-review.md",
-              "altText": "Diagnosing"
-            },
-            "completionEvents": [
-              "onCommand:crTrack.diagnose"
-            ]
-          }
-        ]
-      }
-    ]
+    }
   },
   "scripts": {
     "build": "node esbuild.js",

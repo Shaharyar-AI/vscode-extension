@@ -30,6 +30,57 @@ export interface RunResult {
 
 const isWindows = process.platform === "win32";
 
+/**
+ * Every child we have spawned and not yet reaped.
+ *
+ * Windows has no process groups and `SIGTERM` is advisory there, so a killed
+ * `claude.cmd` leaves its node children running. Those orphans accumulate,
+ * hold file handles, and are why an uninstall can fail to remove the extension
+ * directory. Tracking them is the only way to guarantee they go.
+ */
+const live = new Set<import("node:child_process").ChildProcess>();
+
+/** Kill a process and everything it started. */
+function killTree(child: import("node:child_process").ChildProcess): void {
+  const pid = child.pid;
+  if (pid === undefined) return;
+  if (isWindows) {
+    try {
+      // /T takes the children with it, /F does not ask nicely.
+      spawn("taskkill", ["/pid", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      }).unref();
+      return;
+    } catch {
+      // fall through to the portable path
+    }
+  }
+  try {
+    child.kill("SIGTERM");
+    setTimeout(() => {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* already gone */
+      }
+    }, 2_000).unref();
+  } catch {
+    /* already gone */
+  }
+}
+
+/**
+ * Terminate every child still running. Called on deactivate so closing the
+ * window never leaves a review process behind.
+ */
+export function killAllChildren(): number {
+  const n = live.size;
+  for (const child of live) killTree(child);
+  live.clear();
+  return n;
+}
+
 /** True for executables Windows can only run through the shell. */
 function needsShell(command: string): boolean {
   return isWindows && /\.(cmd|bat)$/i.test(command);
@@ -57,6 +108,7 @@ export function run(command: string, args: string[], opts: RunOptions = {}): Pro
     }
 
     const child = spawn(cmd, argv, spawnOpts);
+    live.add(child);
 
     let stdout = "";
     let stderr = "";
@@ -66,18 +118,17 @@ export function run(command: string, args: string[], opts: RunOptions = {}): Pro
     const timer = opts.timeoutMs
       ? setTimeout(() => {
           timedOut = true;
-          child.kill("SIGTERM");
-          // SIGTERM is advisory on Windows; make sure it actually dies.
-          setTimeout(() => child.kill("SIGKILL"), 2_000).unref();
+          killTree(child);
         }, opts.timeoutMs)
       : null;
 
-    opts.onSpawn?.(() => child.kill("SIGTERM"));
+    opts.onSpawn?.(() => killTree(child));
 
     child.stdout?.on("data", (c: Buffer) => (stdout += c.toString("utf8")));
     child.stderr?.on("data", (c: Buffer) => (stderr += c.toString("utf8")));
 
     child.on("error", (err) => {
+      live.delete(child);
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
@@ -85,6 +136,7 @@ export function run(command: string, args: string[], opts: RunOptions = {}): Pro
     });
 
     child.on("close", (code) => {
+      live.delete(child);
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);

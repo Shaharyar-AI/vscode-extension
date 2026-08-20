@@ -17,3 +17,9 @@ Thumbs.db
 # env
 .env
 .env.local
+
+# packaged extension
+*.vsix
+
+# playwright scratch
+.playwright-mcp/

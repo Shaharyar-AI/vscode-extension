@@ -1,5 +1,6 @@
 # Only the bundle, the guides, the icon and the manifest ship.
 src/**
+test/**
 node_modules/**
 esbuild.js
 smoke.js

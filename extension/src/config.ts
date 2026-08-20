@@ -15,8 +15,6 @@ import { CATEGORIES, DEFAULT_CONFIG, type Category, type EngineConfig } from "@e
 export interface Settings extends EngineConfig {
   enabled: boolean;
   claudePath: string | undefined;
-  debounceMs: number;
-  blockCommitOnBlocking: boolean;
 }
 
 /**
@@ -66,8 +64,6 @@ export function readSettings(repoRoot: string | undefined): Settings {
     ...DEFAULT_CONFIG,
     enabled: vs.get<boolean>("enabled", true),
     claudePath: vs.get<string>("claudePath")?.trim() || undefined,
-    debounceMs: vs.get<number>("debounceMs", 2000),
-    blockCommitOnBlocking: vs.get<boolean>("blockCommitOnBlocking", true),
     model: vs.get<string>("model", DEFAULT_CONFIG.model),
     effort: vs.get<EngineConfig["effort"]>("effort", DEFAULT_CONFIG.effort),
     profile: vs.get<EngineConfig["profile"]>("profile", DEFAULT_CONFIG.profile),

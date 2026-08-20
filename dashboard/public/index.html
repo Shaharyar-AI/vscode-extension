@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CR-Track</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%232f9e8f%27/%3E%3Ctext x=%2716%27 y=%2722%27 font-size=%2715%27 font-family=%27sans-serif%27 font-weight=%27700%27 fill=%27%2304211e%27 text-anchor=%27middle%27%3ECR%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #151b23; --panel-2: #1b222c; --line: #262d38;
+    --text: #e6edf3; --muted: #8b949e; --dim: #6e7681;
+    --accent: #2f9e8f; --blocking: #f85149; --important: #d29922;
+    --nit: #58a6ff; --suggestion: #8b949e; --good: #3fb950;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 80px; }
+
+  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .logo {
+    width: 34px; height: 34px; border-radius: 9px; flex: none;
+    background: linear-gradient(135deg, var(--accent), #1d6f66);
+    display: grid; place-items: center; font-weight: 700; font-size: 15px; color: #04211e;
+  }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.2px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 2px 0 22px; }
+  .spacer { flex: 1; }
+  .live { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+  .dot.stale { background: var(--important); }
+  .dot.dead { background: var(--blocking); }
+
+  .endpoint {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 22px;
+  }
+  .endpoint span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .endpoint code {
+    font-family: var(--mono); font-size: 13px; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line);
+    padding: 5px 9px; border-radius: 6px; word-break: break-all;
+  }
+  button {
+    font: inherit; font-size: 12px; color: var(--text); cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 11px;
+  }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .toggle { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; }
+  .badge-test {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--important); border: 1px solid #6b4d13; background: #2a2110;
+    padding: 1px 5px; border-radius: 4px; margin-left: 6px;
+  }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .stat b { display: block; font-size: 25px; font-weight: 650; letter-spacing: -0.5px; }
+  .stat i { font-style: normal; color: var(--muted); font-size: 12px; }
+  .stat.blocking b { color: var(--blocking); }
+  .stat.important b { color: var(--important); }
+
+  .tablewrap { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 900px; }
+  th {
+    text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--dim); padding: 11px 14px;
+    background: var(--panel-2); border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr.row { cursor: pointer; }
+  tr.row:hover td { background: var(--panel-2); }
+  tr.row.open td { background: var(--panel-2); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .who { font-weight: 550; }
+  .when, .meta { color: var(--muted); font-size: 12px; }
+  .sha { font-family: var(--mono); font-size: 12px; color: var(--nit); }
+  .msg { display: block; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nums { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  .add { color: var(--good); } .del { color: var(--blocking); }
+
+  .pills { display: flex; gap: 5px; flex-wrap: wrap; }
+  .pill {
+    font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 20px;
+    border: 1px solid; white-space: nowrap;
+  }
+  .pill.blocking { color: var(--blocking); border-color: #6e2b28; background: #2d1513; }
+  .pill.important { color: var(--important); border-color: #6b4d13; background: #2a2110; }
+  .pill.nit { color: var(--nit); border-color: #1f4b7a; background: #10233a; }
+  .pill.suggestion { color: var(--suggestion); border-color: #3a424d; background: #1d222a; }
+  .pill.clean { color: var(--good); border-color: #1f5c2e; background: #10241a; }
+
+  .detail td { background: #10161e; padding: 0; }
+  .detail .inner { padding: 6px 14px 18px; }
+  .finding {
+    border-left: 3px solid var(--line); padding: 10px 0 10px 14px; margin-top: 10px;
+  }
+  .finding.blocking { border-left-color: var(--blocking); }
+  .finding.important { border-left-color: var(--important); }
+  .finding.nit { border-left-color: var(--nit); }
+  .finding.suggestion { border-left-color: var(--suggestion); }
+  .finding h4 { margin: 0 0 4px; font-size: 13.5px; font-weight: 600; }
+  .finding .loc { font-family: var(--mono); font-size: 11.5px; color: var(--dim); margin-bottom: 6px; }
+  .finding p { margin: 0 0 6px; color: #c3ccd6; font-size: 13px; }
+  .finding .fix { color: var(--text); font-size: 13px; }
+  .finding .fix b { color: var(--accent); font-weight: 600; }
+
+  .empty { padding: 46px 24px; text-align: center; }
+  .empty h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+  .empty p { margin: 0 auto 6px; color: var(--muted); max-width: 520px; }
+  .empty code { font-family: var(--mono); font-size: 12.5px; background: var(--panel-2); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--line); }
+  .steps { text-align: left; max-width: 520px; margin: 18px auto 0; color: var(--muted); font-size: 13px; }
+  .steps li { margin-bottom: 7px; }
+  .err { color: var(--blocking); }
+  .loading { padding: 40px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">CR</div>
+    <div>
+      <h1>CR-Track</h1>
+      <div class="sub" style="margin:0">Commit reviews, as they land</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="live"><span class="dot" id="dot"></span><span id="livetext">connecting…</span></div>
+  </header>
+
+  <div class="endpoint">
+    <span>Ingest endpoint</span>
+    <code id="ep">…</code>
+    <button id="copy">Copy</button>
+    <button id="refresh">Refresh</button>
+    <button id="sample">Send test report</button>
+    <label class="toggle"><input type="checkbox" id="showtest"> Show test reports</label>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="tablewrap">
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>When</th><th>Developer</th><th>Repository</th><th>Commit</th>
+            <th>Changes</th><th>Findings</th><th>Took</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div id="placeholder"><div class="loading">Loading…</div></div>
+  </div>
+
+</div>
+
+<script>
+const SEVERITIES = ["blocking", "important", "nit", "suggestion"];
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (ch) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+
+const ENDPOINT = location.origin + "/api/ingest";
+document.getElementById("ep").textContent = ENDPOINT;
+
+document.getElementById("copy").onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(ENDPOINT);
+    const b = document.getElementById("copy");
+    b.textContent = "Copied";
+    setTimeout(() => (b.textContent = "Copy"), 1400);
+  } catch { /* clipboard blocked — the URL is on screen anyway */ }
+};
+
+function ago(iso) {
+  const then = new Date(iso).getTime();
+  if (!then) return "";
+  const s = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (s < 60) return s + "s ago";
+  if (s < 3600) return Math.round(s / 60) + "m ago";
+  if (s < 86400) return Math.round(s / 3600) + "h ago";
+  return Math.round(s / 86400) + "d ago";
+}
+
+function severityPills(r) {
+  const parts = SEVERITIES
+    .filter((s) => r[s] > 0)
+    .map((s) => `<span class="pill ${s}">${r[s]} ${s}</span>`);
+  if (!parts.length) return '<span class="pill clean">clean</span>';
+  return parts.join("");
+}
+
+let all = [];
+let reviews = [];
+const openRows = new Set();
+
+/**
+ * Anything that did not come from the extension is a probe of some kind.
+ * Mixing those in with real commits makes the numbers lie, so they are hidden
+ * unless asked for.
+ */
+const isTest = (r) => r.surface !== "vscode-extension";
+
+function applyFilter() {
+  const show = document.getElementById("showtest").checked;
+  reviews = show ? all : all.filter((r) => !isTest(r));
+}
+
+function renderStats() {
+  const devs = new Set(reviews.map((r) => r.developerEmail));
+  const total = reviews.reduce((n, r) => n + r.findingsTotal, 0);
+  const blocking = reviews.reduce((n, r) => n + r.blocking, 0);
+  const clean = reviews.filter((r) => r.findingsTotal === 0).length;
+  const cells = [
+    ["", reviews.length, "commits reviewed"],
+    ["", devs.size, devs.size === 1 ? "developer" : "developers"],
+    ["", total, "recommendations"],
+    ["blocking", blocking, "blocking"],
+    ["", clean, "clean commits"],
+  ];
+  document.getElementById("stats").innerHTML = cells
+    .map(([cls, n, label]) => `<div class="stat ${cls}"><b>${n}</b><i>${label}</i></div>`)
+    .join("");
+}
+
+function renderRows() {
+  const tbody = document.getElementById("rows");
+  const placeholder = document.getElementById("placeholder");
+
+  if (!reviews.length) {
+    tbody.innerHTML = "";
+    const hidden = all.length - reviews.length;
+    placeholder.innerHTML = `
+      <div class="empty">
+        <h3>No reviews yet</h3>
+        ${hidden ? `<p style="color:var(--important)">${hidden} test report(s) hidden — tick “Show test reports” to see them.</p>` : ""}
+        <p>This page fills in on its own the moment a developer commits with CR-Track installed.</p>
+        <ol class="steps">
+          <li>In VS Code, open <b>Settings</b> and set <code>crTrack.endpoint</code> to the URL above.</li>
+          <li>Commit a change to any source file.</li>
+          <li>The review appears here within a minute.</li>
+        </ol>
+        <p style="margin-top:18px">Want to check the plumbing first? Press <b>Send test report</b>.</p>
+      </div>`;
+    return;
+  }
+
+  placeholder.innerHTML = "";
+  tbody.innerHTML = reviews.map((r) => {
+    const open = openRows.has(r.key);
+    return `
+      <tr class="row ${open ? "open" : ""}" data-key="${esc(r.key)}">
+        <td><div>${esc(ago(r.completedAt || r.receivedAt))}</div>
+            <div class="when">${esc(new Date(r.completedAt || r.receivedAt).toLocaleString())}</div></td>
+        <td><div class="who">${esc(r.developerName)}${
+              isTest(r) ? '<span class="badge-test">test</span>' : ""
+            }</div>
+            <div class="meta">${esc(r.developerEmail)}</div></td>
+        <td><div>${esc(r.repoName)}</div><div class="meta">${esc(r.branch)}</div></td>
+        <td><span class="sha">${esc(r.commitShort || "—")}</span>
+            <span class="msg meta">${esc(r.commitMessage)}</span></td>
+        <td class="nums">${r.filesChanged} file${r.filesChanged === 1 ? "" : "s"}<br>
+            <span class="add">+${r.linesAdded}</span> <span class="del">-${r.linesRemoved}</span></td>
+        <td><div class="pills">${severityPills(r)}</div></td>
+        <td class="nums">${(r.durationMs / 1000).toFixed(0)}s</td>
+      </tr>
+      <tr class="detail" data-detail="${esc(r.key)}" style="${open ? "" : "display:none"}">
+        <td colspan="7"><div class="inner" id="d-${esc(r.key)}">Loading…</div></td>
+      </tr>`;
+  }).join("");
+
+  tbody.querySelectorAll("tr.row").forEach((tr) => {
+    tr.onclick = () => toggle(tr.dataset.key);
+  });
+  for (const key of openRows) void loadDetail(key);
+}
+
+async function toggle(key) {
+  const detail = document.querySelector(`tr[data-detail="${CSS.escape(key)}"]`);
+  const row = document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  if (!detail) return;
+  if (openRows.has(key)) {
+    openRows.delete(key);
+    detail.style.display = "none";
+    row.classList.remove("open");
+  } else {
+    openRows.add(key);
+    detail.style.display = "";
+    row.classList.add("open");
+    await loadDetail(key);
+  }
+}
+
+async function loadDetail(key) {
+  const box = document.getElementById("d-" + key);
+  if (!box || box.dataset.loaded) return;
+  try {
+    const res = await fetch("/api/review?key=" + encodeURIComponent(key));
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "not found");
+    const findings = data.report.findings || [];
+    box.dataset.loaded = "1";
+    if (!findings.length) {
+      box.innerHTML = `<p style="color:var(--good);margin-top:12px">
+        No problems found in this commit.</p>`;
+      return;
+    }
+    box.innerHTML = findings.map((f) => `
+      <div class="finding ${esc(f.severity)}">
+        <h4>${esc(f.title)}</h4>
+        <div class="loc">${esc(f.file)}:${esc(f.lineStart)}${
+          f.lineEnd && f.lineEnd !== f.lineStart ? "-" + esc(f.lineEnd) : ""
+        } &middot; ${esc(f.severity)} &middot; ${esc(f.category)}</div>
+        <p>${esc(f.description)}</p>
+        <div class="fix"><b>Suggested:</b> ${esc(f.suggestion)}</div>
+      </div>`).join("");
+  } catch (err) {
+    box.innerHTML = `<p class="err" style="margin-top:12px">Could not load this review: ${esc(err.message)}</p>`;
+  }
+}
+
+function setLive(kind, text) {
+  document.getElementById("dot").className = "dot " + kind;
+  document.getElementById("livetext").textContent = text;
+}
+
+async function load() {
+  try {
+    const res = await fetch("/api/reviews?limit=200", { cache: "no-store" });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "request failed");
+    all = data.reviews || [];
+    applyFilter();
+    renderStats();
+    renderRows();
+    setLive("", "live · updated " + new Date().toLocaleTimeString());
+  } catch (err) {
+    setLive("dead", "connection problem");
+    document.getElementById("placeholder").innerHTML =
+      `<div class="empty"><h3 class="err">Could not reach the API</h3><p>${esc(err.message)}</p></div>`;
+  }
+}
+
+document.getElementById("refresh").onclick = load;
+
+document.getElementById("showtest").onchange = () => {
+  applyFilter();
+  renderStats();
+  renderRows();
+};
+
+document.getElementById("sample").onclick = async () => {
+  const btn = document.getElementById("sample");
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  const now = new Date().toISOString();
+  const payload = {
+    schemaVersion: "2.0",
+    source: "claude-code-skill",
+    ruleset: "coderabbit-style@2.0",
+    review: {
+      id: "test-" + Date.now(),
+      triggeredAt: now, completedAt: now, durationMs: 41000,
+      status: "completed", mode: "committed", model: "claude-opus-5", effort: "medium",
+      commit: {
+        sha: "0000000000000000000000000000000000000000", shortSha: "test123",
+        message: "Test report from the dashboard button",
+        authorName: "Dashboard Test", authorEmail: "test@example.com", authoredAt: now,
+      },
+    },
+    developer: { name: "Dashboard Test", email: "test@example.com", gitUser: "test" },
+    repository: { name: "sample-repo", remote: "", branch: "main", baseBranch: "main", isDirty: false },
+    diffStats: { filesChanged: 1, linesAdded: 12, linesRemoved: 3, files: [] },
+    findings: [{
+      id: "F1", file: "src/payments.ts", lineStart: 3, lineEnd: 3,
+      severity: "blocking", category: "security",
+      title: "SQL built by string concatenation",
+      description: "The account id is interpolated straight into the query, so any value containing a quote changes the statement.",
+      suggestion: "Use a parameterised query and pass the id as a bound value.",
+      confidence: 0.95, hadPatch: false, status: "proposed", detectedBy: "llm",
+    }],
+    changes: [],
+    summary: {
+      findingsTotal: 1,
+      bySeverity: { blocking: 1, important: 0, nit: 0, suggestion: 0 },
+      byCategory: { security: 1 }, applied: 0, dismissed: 0, outstanding: 1,
+    },
+    client: { surface: "dashboard-test", extensionVersion: "0.4.0", ci: false },
+  };
+  try {
+    const res = await fetch("/api/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    btn.textContent = data.ok ? "Sent" : "Rejected";
+    // Otherwise the row it just created is filtered straight back out and the
+    // button looks like it did nothing.
+    document.getElementById("showtest").checked = true;
+    await load();
+  } catch {
+    btn.textContent = "Failed";
+  }
+  setTimeout(() => { btn.textContent = "Send test report"; btn.disabled = false; }, 1800);
+};
+
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>

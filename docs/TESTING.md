@@ -1,9 +1,10 @@
 # CR-Track — tester's guide
 
-Reviews your staged changes with Claude before you commit. Findings appear as
-squiggles and in a panel, each with accept and reject.
+CR-Track reviews each commit with Claude. Findings appear as squiggles and in a
+panel; a record of every review goes to the dashboard.
 
-**About 15 minutes to work through.** Everything happens on your machine.
+**About 10 minutes.** The review runs on your machine; only a redacted report
+leaves it.
 
 ---
 
@@ -31,52 +32,66 @@ claude
 > **not on PATH** — so `claude` may fail in a terminal while the extension still
 > finds it. That is expected; the extension searches known locations too.
 
-### 2. Install the extension
+### 2. Remove any older CR-Track first
+
+Versions before 0.4.0 could leave `claude` processes running, and Windows then
+refuses to delete the extension folder. If an uninstall ever failed for you:
+
+```powershell
+Get-Process claude -ErrorAction SilentlyContinue | Stop-Process -Force
+```
+
+Close VS Code, run that, then uninstall. 0.4.0 kills its own children, so this
+is a one-time cleanup.
+
+### 3. Install
 
 ```bash
-code --install-extension cr-track-0.1.0.vsix
+code --install-extension cr-track-0.4.0.vsix
 ```
 
 Or: Extensions panel → `···` menu → **Install from VSIX…**
 
 Then **Ctrl+Shift+P → Developer: Reload Window**.
 
-### 3. Confirm it started
+### 4. Confirm it started
 
 **Ctrl+Shift+P → CR-Track: Show Log**. A healthy start reads:
 
 ```
+Git 2.x.x at git
+Claude CLI 2.1.x at …\claude.exe
 Guides: …\resources\references
-Claude CLI 2.1.227 at …\claude.exe
-Active on <your-repo> (<branch>)
+Watching for commits in …
+Active on <your-repo> (<branch>) — every new commit will be reviewed
 ```
 
-If it says *Guides not found* or *Claude CLI not found* — stop and report that.
+If any of those lines is missing, run **CR-Track: Diagnose** and send the
+output — it prints every precondition in one go.
 
 ---
 
 ## Test it
 
-Use a scratch branch of a real repo. Nothing is committed without you.
+Use a scratch branch of a real repo.
 
-### A · A review happens
+### A · A commit triggers a review
 
-1. Edit a file — ideally introduce something genuinely wrong.
-2. Stage it (`git add`, or `+` in Source Control).
-3. Wait ~2 seconds.
+1. Edit a source file — ideally introduce something genuinely wrong.
+2. Commit it, however you normally do.
 
-**Expect:** status bar (bottom left) shows **Reviewing…** with a spinner, then a
-count like **CR-Track 4**. Typically 20–60 seconds.
-
-You should be able to keep typing throughout. **Nothing should block.**
+**Expect:** within a couple of seconds the status bar (bottom left) shows
+**CR-Track reviewing…**, then a count like **CR-Track 4**. Typically 20–60
+seconds. You can keep working throughout; nothing blocks, and the commit has
+already happened.
 
 ### B · The Findings panel
 
 Click the **shield icon** in the left activity bar.
 
-**Expect:** a tree of folders → files → findings. Each finding shows a title and
-`f1 · blocking · line 42 · 95%`. Hover for the full description, the suggestion,
-and a preview of any patch.
+**Expect:** a tree of folders → files → findings, each showing a title and
+`blocking · line 42`. Hover for the full description and the suggested fix.
+Click a row to jump to the line.
 
 Check: does the severity look right? Are the findings *real*, or noise?
 
@@ -84,56 +99,52 @@ Check: does the severity look right? Are the findings *real*, or noise?
 
 Open a file that has findings.
 
-**Expect:** coloured underlines on the reported lines; entries in the Problems
-panel (**Ctrl+Shift+M**) tagged `CR-Track`.
+**Expect:** coloured underlines on the reported lines, and entries in the
+Problems panel (**Ctrl+Shift+M**) tagged `cr-track`.
 
-### D · Accept a fix
+### D · It ignores what it should ignore
 
-In the panel, hover a finding with a **✓** and click it.
+Each of these should produce **no** review. The log says why.
 
-**Expect:** the file changes, the row greys out and reads `applied`, the squiggle
-disappears.
+1. Commit a change to a `.md` file only → *touches no source files*.
+2. Switch branches (`git checkout -b scratch`) → *not a commit, ignoring*.
+3. Merge a branch with `--no-ff` → skipped.
 
-> **✓ only appears where Claude supplied a patch.** Findings like "these
-> functions have no tests" show reject only — that is deliberate, not a bug.
+### E · The dashboard
 
-### E · Reject
+Open <https://cr-track-dashboard.vercel.app>.
 
-Click **✗** on any finding.
+**Expect:** your commit at the top within a few seconds of the review
+finishing — your name, the repository and branch, the commit message, the
+number of files and lines, and the findings by severity. Click the row to read
+the full findings.
 
-**Expect:** a prompt for a reason. Type one. The row reads `dismissed`.
-Pressing Escape should cancel entirely, leaving the finding open.
+If it is not there, check the log for `Report sent to the dashboard (200)`. A
+line saying *queued for retry* means the dashboard was unreachable; the report
+is safe on disk and will be sent on the next activation.
 
-### F · The staleness guard
-
-1. Find a finding that still has a **✓**.
-2. Add two blank lines at the **top** of that file and save.
-3. Click **✓**.
-
-**Expect:** a warning that the file changed since the review, and **the file is
-not modified**. This is the guard against patching shifted lines.
-
-### G · Commit gate
-
-Click **Review & Commit** in the Source Control toolbar.
-
-**Expect:** with blocking findings outstanding, a dialog listing them offering
-**Review them** / **Commit anyway**. "Commit anyway" asks for a reason, then
-commits. With no blockers it commits without asking.
-
-### H · Fails safely
+### F · It fails safely
 
 Rename your Claude CLI temporarily, reload the window.
 
-**Expect:** the extension goes quiet with an explanatory tooltip and **one**
-notification. **Committing still works normally.** Put the CLI back afterwards.
+**Expect:** the status bar reads **inactive** with an explanatory tooltip and
+**one** notification. **Committing still works normally.** Put the CLI back
+afterwards; the extension picks it up when the window regains focus.
+
+### G · Uninstall
+
+Extensions panel → CR-Track → **Uninstall**.
+
+**Expect:** it uninstalls without an error about files in use. This is the bug
+0.4.0 fixes, so it is worth doing deliberately rather than assuming.
 
 ---
 
 ## What I need back
 
 For anything wrong, the log is the most useful thing:
-**Ctrl+Shift+P → CR-Track: Show Log** → copy all.
+**Ctrl+Shift+P → CR-Track: Show Log** → copy all. Add **CR-Track: Diagnose**
+output if it looked inactive.
 
 Worth reporting either way:
 
@@ -148,21 +159,16 @@ Worth reporting either way:
 
 Stated up front so they are not surprises.
 
-- **Reviews take 20–60s** on a typical change, longer on big ones. It runs while
-  you keep working, so you normally do not wait — but a commit right after
-  staging can catch it mid-review.
-- **Not every finding has a patch.** Anything needing new files, new imports
-  elsewhere, or judgement is reported without a ✓.
-- **Nothing is truly blocked.** VS Code gives extensions no pre-commit hook, so
-  the gate is a prompt with an override, and `--no-verify` bypasses everything.
-  This is advisory by design.
-- **Reports are local unless configured.** Every review writes
-  `.cr-track/last-review.json`. Nothing is uploaded unless a repo's
-  `.cr-track.yaml` or the `crTrack.endpoint` setting names a dashboard.
-- **UI is unproven in the wild.** Logic and data flow are covered by 44
-  automated checks, but icon rendering, squiggle painting and menu placement
-  have never been seen outside a test harness. That is largely what this pass
-  is for.
+- **Reviews take 20–60s** on a typical commit, longer on big ones. It runs after
+  the commit, so you never wait for it.
+- **Merges are not reviewed.** A merge's diff is everything both branches did.
+- **Documentation, JSON, YAML, lockfiles and generated files are not reviewed.**
+- **Only the most recent commit is reviewed.** Committing twice in quick
+  succession while a review is running skips the second one; the log says so.
+- **Findings are advisory.** Nothing is blocked and nothing is auto-fixed.
+- **UI is thinly proven.** Logic and data flow are covered by 39 automated
+  checks plus a live end-to-end against the real dashboard, but icon rendering,
+  squiggle painting and menu placement have only been seen on one machine.
 
 ## Settings worth knowing
 
@@ -173,6 +179,7 @@ Stated up front so they are not surprises.
 | `crTrack.effort` | Too slow (`low`) or too shallow (`high`) |
 | `crTrack.profile` | Too noisy (`chill`) or too quiet (`assertive`) |
 | `crTrack.minSeverity` | You only care about real problems (`important`) |
+| `crTrack.endpoint` | You want reports somewhere else, or nowhere (clear it) |
 | `crTrack.enabled` | You want it off without uninstalling |
 
 ## Uninstalling
