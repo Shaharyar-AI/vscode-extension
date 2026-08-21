@@ -882,15 +882,23 @@ export async function transfer(from: string, to: string, amount: any) {
     seen.length = 0;
     commit(repo, "add transfer", { "src/payments.ts": BAD_SOURCE });
     await fireCommitWatcher(state);
+    // Delivery is awaited after the outcome line is logged, so settle() can
+    // return while the POST is still in flight.
+    await waitFor(() => seen.length > 0);
     const posted = seen[seen.length - 1];
     check("The token is sent as a bearer header",
       posted?.auth === "Bearer tok_abc123",
-      posted ? JSON.stringify(posted.auth) : "(no request reached the server)");
+      posted ? JSON.stringify(posted.auth) : "(no request reached the server in 20s)");
+
+    // Read once, defensively: a missing request must fail these checks, not
+    // throw and take the rest of the suite down with it.
+    let sentBody = {};
+    try { sentBody = JSON.parse(posted?.body ?? "{}"); } catch { /* reported below */ }
     check("...alongside a schema 2.x payload",
-      /^2\./.test(JSON.parse(posted.body).schemaVersion), JSON.parse(posted.body).schemaVersion);
+      /^2\./.test(sentBody.schemaVersion || ""), sentBody.schemaVersion || "(none)");
     check("...carrying repository.repo qualified by its owner",
-      String(JSON.parse(posted.body).repository?.repo || "").includes("/"),
-      JSON.parse(posted.body).repository?.repo || "(absent)",
+      String(sentBody.repository?.repo || "").includes("/"),
+      sentBody.repository?.repo || "(absent)",
       "repository.repo is a bare name, which collides across organisations");
 
     restore();
@@ -1109,7 +1117,16 @@ export async function transfer(from: string, to: string, amount: any) {
       "", `registered but not in package.json: ${undeclared.join(", ")}`);
     check("No walkthrough is contributed", !pkg.contributes.walkthroughs,
       "removed with the setup flow");
-    check("The dashboard endpoint is configurable",
+    {
+    const prop = pkg.contributes.configuration.properties["crTrack.endpoint"];
+    check("Reports go to the team's tracker by default",
+      prop.default === "https://ikonictracker.demosites.cc/api/ingest", prop.default,
+      `still pointing at ${prop.default}`);
+    check("...and the default says a token is needed, since without one it 401s",
+      /ingest token/i.test(prop.description || ""), "documented");
+  }
+
+  check("The dashboard endpoint is configurable",
       !!pkg.contributes.configuration.properties["crTrack.endpoint"], "crTrack.endpoint");
     restore();
   }

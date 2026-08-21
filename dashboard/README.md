@@ -5,7 +5,11 @@ It also serves the extension itself, so a team can install without the
 Marketplace.
 
 **Live:** https://cr-track-dashboard.vercel.app
-**Ingest:** `POST https://cr-track-dashboard.vercel.app/api/ingest`
+
+This host still serves the extension download. **Review reports no longer come
+here** — since 0.7.1 they go to the team's tracker at
+`https://ikonictracker.demosites.cc/api/ingest`, which authenticates each
+developer with a personal ingest token.
 
 ## Installing the extension
 

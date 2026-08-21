@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -214,8 +214,8 @@
         },
         "crTrack.endpoint": {
           "type": "string",
-          "default": "https://cr-track-dashboard.vercel.app/api/ingest",
-          "description": "Dashboard ingest URL for review reports. A repository's .cr-track.yaml `endpoint` overrides this. Clear it to keep reports on disk only."
+          "default": "https://ikonictracker.demosites.cc/api/ingest",
+          "description": "Dashboard ingest URL for review reports. Reporting needs a personal ingest token \u2014 run 'CR-Track: Set ingest token'. A repository's .cr-track.yaml `endpoint` overrides this. Clear it to keep reports on disk only."
         },
         "crTrack.claudePath": {
           "type": "string",

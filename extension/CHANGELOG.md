@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.1
+
+Reports now go to the team's tracker.
+
+- `crTrack.endpoint` defaults to `https://ikonictracker.demosites.cc/api/ingest`.
+  Verified end to end: a real commit, reviewed by Claude, accepted with a 200.
+- **Reporting there needs a personal token.** Run **CR-Track: Set ingest token**
+  once with the token minted for you. Without it every report is refused and the
+  extension says so — reviews still run and are kept locally, but nothing is
+  recorded against you.
+- A repository's `.cr-track.yaml` still overrides the setting, and clearing the
+  setting keeps reports on disk only.
+
 ## 0.7.0
 
 Two bugs in 0.6.0's green ticks, and the groundwork for reporting to a dashboard
