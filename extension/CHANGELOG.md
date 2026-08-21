@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0
+
+The reviewer can say something good, and is told to quote less.
+
+- **Annotations work.** The prompt said "Return findings ONLY", which
+  contradicted the rule set's `learning` and `praise` notes — so the model never
+  emitted one. The prompt now asks for them explicitly, in their own array.
+- That alone would have changed nothing: the extension passed a hardcoded empty
+  array into the report and discarded whatever the reviewer returned. Both ends
+  are fixed, so the notes now reach the dashboard.
+- **Quoting is bounded.** A finding should quote a line or two to make its
+  point, not paste back a whole function — descriptions and suggestions leave
+  the machine and are stored server-side. Customer data, personal data and
+  credentials must never be reproduced, even to illustrate the problem.
+- `docs/PROMPT.md` is generated from the engine's own builder (`npm run
+  prompt-doc`), so what is documented is what the model receives.
+
 ## 0.7.1
 
 Reports now go to the team's tracker.

@@ -652,9 +652,12 @@ export async function transfer(from: string, to: string, amount: any) {
     await fireCommitWatcher(first.state);
 
     const before = await findings(first.state);
-    check("A review leaves a report on disk",
-      fs.existsSync(path.join(repo, ".cr-track", "last-review.json")),
-      ".cr-track/last-review.json");
+    // Delivery runs after the outcome line is logged, and writes the report
+    // before it POSTs — so this file appears a moment after settle() returns.
+    const reportPath = path.join(repo, ".cr-track", "last-review.json");
+    const wrote = await waitFor(() => fs.existsSync(reportPath));
+    check("A review leaves a report on disk", wrote,
+      wrote ? ".cr-track/last-review.json" : "no report written after 20s");
 
     // Tick off the first two, the way someone working through the list would.
     const done = before.slice(0, 2).map((r) => r.node.finding.id);
@@ -1124,6 +1127,33 @@ export async function transfer(from: string, to: string, amount: any) {
       `still pointing at ${prop.default}`);
     check("...and the default says a token is needed, since without one it 401s",
       /ingest token/i.test(prop.description || ""), "documented");
+  }
+
+  {
+    // The reviewer is asked for learning/praise notes, the schema has a place
+    // for them, and the report must actually carry them. All three have to
+    // agree: for several versions the prompt said "findings ONLY" and the
+    // extension passed a hardcoded empty array, so annotations could never
+    // appear however the model behaved.
+    const { FINDINGS_SCHEMA_JSON } = require(path.join(EXT_DIR, "..", "engine", "dist", "schema.js"));
+    const { buildPrompt } = require(path.join(EXT_DIR, "..", "engine", "dist", "prompt.js"));
+    const { DEFAULT_CONFIG } = require(path.join(EXT_DIR, "..", "engine", "dist", "types.js"));
+    const schema = JSON.parse(FINDINGS_SCHEMA_JSON);
+    const { systemPrompt } = buildPrompt([], DEFAULT_CONFIG, null, []);
+
+    check("The schema has somewhere to put annotations",
+      !!schema.properties.annotations, "annotations array");
+    check("...and the prompt does not forbid them",
+      !/Return findings ONLY/.test(systemPrompt) && /annotations/i.test(systemPrompt),
+      "annotations invited",
+      "the prompt says findings ONLY, so the model will never emit an annotation");
+    check("...and the reviewer is told to keep quoted code short",
+      /Quote only what is needed/.test(systemPrompt), "quoting bounded",
+      "nothing stops a finding pasting a whole function into the report");
+    check("...and the report carries them rather than dropping them",
+      !/annotations: \[\]/.test(fs.readFileSync(path.join(EXT_DIR, "src", "extension.ts"), "utf8")),
+      "passed through",
+      "extension.ts still hardcodes annotations: [] — the model's notes are discarded");
   }
 
   check("The dashboard endpoint is configurable",

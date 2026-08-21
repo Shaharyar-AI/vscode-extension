@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",

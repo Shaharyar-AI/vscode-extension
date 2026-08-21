@@ -45,7 +45,7 @@ import { killAllChildren } from "@engine/proc";
 import { buildReport } from "@engine/report";
 import { runReview } from "@engine/review";
 import { deliver, flushQueue } from "@engine/telemetry";
-import type { DiffStats, Finding, RepoContext } from "@engine/types";
+import type { Annotation, DiffStats, Finding, RepoContext } from "@engine/types";
 
 let session: Session | undefined;
 
@@ -413,7 +413,16 @@ class Session implements vscode.Disposable {
       }
 
       // Half two: send the outcome to the dashboard.
-      await this.report(repoRoot, commit, stats, result.findings, triggeredAt, result.durationMs, cfg);
+      await this.report(
+        repoRoot,
+        commit,
+        stats,
+        result.findings,
+        result.annotations,
+        triggeredAt,
+        result.durationMs,
+        cfg,
+      );
     } finally {
       this.reviewing = false;
     }
@@ -424,6 +433,7 @@ class Session implements vscode.Disposable {
     commit: CommitInfo,
     stats: DiffStats,
     findings: Finding[],
+    annotations: Annotation[],
     triggeredAt: Date,
     durationMs: number,
     cfg: Settings,
@@ -436,7 +446,10 @@ class Session implements vscode.Disposable {
         repo: { ...context, head: commit.sha, headShort: commit.shortSha },
         stats,
         findings,
-        annotations: [],
+        // The reviewer returns learning and praise notes alongside findings.
+        // These were being dropped here, so a prompt that produced them would
+        // still have shown nothing: the report never carried them.
+        annotations,
         outcomes: new Map(),
         scope: "committed",
         model: cfg.model,

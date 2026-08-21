@@ -2,7 +2,7 @@
   "name": "cr-track-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "CR-Track review engine — drives the local Claude CLI over a git diff and returns structured findings. Phase 0: standalone, no VS Code.",
+  "description": "CR-Track review engine \u2014 drives the local Claude CLI over a git diff and returns structured findings. Phase 0: standalone, no VS Code.",
   "license": "MIT",
   "type": "commonjs",
   "main": "dist/index.js",
@@ -16,7 +16,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",
     "test": "tsc -p tsconfig.json && node dist/selftest.js",
-    "review": "node dist/cli.js"
+    "review": "node dist/cli.js",
+    "prompt-doc": "tsc -p tsconfig.json && node scripts/generate-prompt-doc.cjs"
   },
   "devDependencies": {
     "@types/node": "22",
