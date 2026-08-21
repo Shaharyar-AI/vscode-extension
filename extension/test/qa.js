@@ -77,6 +77,9 @@ function commit(dir, message, files) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Invoke a registered command the way the palette or a row action would. */
+const run = (state, id, ...args) => state.commands.get(id)?.(...args);
+
 /**
  * Dormant states are the only ones that put a reason after a separator, so this
  * is the marker rather than the word "inactive" — which the status bar
@@ -103,11 +106,11 @@ function findRealClaude() {
 }
 
 /** Activate the extension against a repo. Does NOT wait for a review. */
-async function boot(repo, { answers } = {}) {
+async function boot(repo, { answers, store } = {}) {
   const { vscode, state } = makeStub({ repo, answers });
   const restore = install(vscode);
   const ext = loadExtension(BUNDLE);
-  const context = makeContext(EXT_DIR);
+  const context = makeContext(EXT_DIR, store);
   await ext.activate(context);
   // Activation logs a few lines from promises it does not await. Letting them
   // land here means a test that clears the log afterwards really starts empty
@@ -533,6 +536,118 @@ export async function transfer(from: string, to: string, amount: any) {
         `only the first repository was watched: ${logText(state).slice(-300)}`);
     }
     restore();
+  }
+
+  section("6c. Working through the findings");
+  if (FAST) {
+    skipped("Copy and mark-fixed", "needs a real review to have findings");
+  } else {
+    const repo = makeRepo("triage");
+    const { state, restore } = await boot(repo);
+    commit(repo, "add transfer", { "src/payments.ts": BAD_SOURCE });
+    await fireCommitWatcher(state);
+
+    const rows = await findings(state);
+    check("There are findings to work through", rows.length >= 2, `${rows.length}`);
+
+    if (rows.length >= 2) {
+      const first = rows[0].node;
+      const id = first.finding.id;
+
+      // ---- copy ----------------------------------------------------------
+      state.clipboard = "";
+      await run(state, "crTrack.copyFinding", first);
+      check("Copy puts the finding on the clipboard",
+        state.clipboard.length > 40, `${state.clipboard.length} chars`);
+      check("...naming the file and line",
+        state.clipboard.includes(first.finding.file) &&
+          state.clipboard.includes(String(first.finding.lineStart)),
+        `${first.finding.file}:${first.finding.lineStart}`);
+      check("...and including the suggestion, which is the actionable part",
+        state.clipboard.includes(first.finding.suggestion.slice(0, 30)), "suggestion present");
+
+      // ---- mark fixed -----------------------------------------------------
+      const squigglesBefore = [...state.diagnostics.values()].flat().length;
+      await run(state, "crTrack.markFixed", first);
+      const after = await walkTree(state);
+      const marked = after.find((r) => r.kind === "finding" && r.node.finding.id === id);
+      check("Marking it fixed turns the row green",
+        marked?.contextValue === "finding-fixed" && marked?.description === "fixed",
+        `${marked?.contextValue} / ${marked?.description}`);
+      check("...and the others stay open so the next one is obvious",
+        after.filter((r) => r.kind === "finding" && r.contextValue === "finding-open").length ===
+          rows.length - 1,
+        `${rows.length - 1} still open`);
+      check("...and the panel title shows progress",
+        /1\/\d+ fixed/.test(state.treeView.title ?? ""), state.treeView.title);
+      check("...and the badge counts what is left, not what was found",
+        state.treeView.badge?.value === rows.length - 1,
+        `badge ${state.treeView.badge?.value}`);
+      const squigglesAfter = [...state.diagnostics.values()].flat().length;
+      check("...and its squiggle is gone",
+        squigglesAfter === squigglesBefore - 1,
+        `${squigglesBefore} -> ${squigglesAfter}`);
+
+      // ---- copy all skips what is done -----------------------------------
+      state.clipboard = "";
+      await run(state, "crTrack.copyAllFindings");
+      check("Copy-all skips the ones already fixed",
+        !state.clipboard.includes(first.finding.title),
+        "fixed finding excluded",
+        "a finding already marked fixed was copied again");
+
+      // ---- undo -----------------------------------------------------------
+      await run(state, "crTrack.markNotFixed", first);
+      const undone = (await walkTree(state)).find(
+        (r) => r.kind === "finding" && r.node.finding.id === id,
+      );
+      check("Marking it not-fixed puts it back",
+        undone?.contextValue === "finding-open", undone?.contextValue);
+    }
+    restore();
+  }
+
+  section("6d. Progress survives a window reload");
+  if (FAST) {
+    skipped("Reload persistence", "needs a real review to have findings");
+  } else {
+    const repo = makeRepo("reload");
+    const first = await boot(repo);
+    commit(repo, "add transfer", { "src/payments.ts": BAD_SOURCE });
+    await fireCommitWatcher(first.state);
+
+    const before = await findings(first.state);
+    check("A review leaves a report on disk",
+      fs.existsSync(path.join(repo, ".cr-track", "last-review.json")),
+      ".cr-track/last-review.json");
+
+    // Tick off the first two, the way someone working through the list would.
+    const done = before.slice(0, 2).map((r) => r.node.finding.id);
+    for (const row of before.slice(0, 2)) await run(first.state, "crTrack.markFixed", row.node);
+    const savedState = first.context.store;
+    first.restore();
+
+    // ---- reload: brand new window, same workspace state ------------------
+    const second = await boot(repo, { store: savedState });
+    const after = await walkTree(second.state);
+    const rows = after.filter((r) => r.kind === "finding");
+
+    check("A reload brings the findings back without waiting for a commit",
+      rows.length === before.length, `${rows.length} of ${before.length}`,
+      "the panel was empty after reload — the developer loses their list");
+    check("...with the ones already fixed still green",
+      rows.filter((r) => r.contextValue === "finding-fixed").length === 2,
+      `${rows.filter((r) => r.contextValue === "finding-fixed").length} green`);
+    check("...exactly the ones that were ticked, not just any two",
+      done.every((id) =>
+        rows.find((r) => r.node.finding.id === id)?.contextValue === "finding-fixed"),
+      "same findings");
+    check("...and the title still shows the progress",
+      /2\/\d+ fixed/.test(second.state.treeView.title ?? ""), second.state.treeView.title);
+    check("...and fixed findings do not come back as squiggles",
+      [...second.state.diagnostics.values()].flat().length === before.length - 2,
+      `${[...second.state.diagnostics.values()].flat().length} squiggles`);
+    second.restore();
   }
 
   // ── 7. The report ──────────────────────────────────────────────────────

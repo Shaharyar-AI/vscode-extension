@@ -59,6 +59,18 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
   /** Set per review — one window can hold several repositories. */
   private repoRoot = "";
 
+  /**
+   * Findings the developer has marked done.
+   *
+   * Marked by hand rather than inferred. We cannot tell from an edit whether a
+   * problem was actually solved, and a row that turned green on its own would
+   * be worse than no signal at all — it would be a claim we cannot support.
+   */
+  private fixed = new Set<string>();
+
+  /** Told when the fixed set changes, so it can be persisted and the squiggle dropped. */
+  onFixedChanged: ((id: string, isFixed: boolean) => void) | undefined;
+
   constructor() {
     this.view = vscode.window.createTreeView("crTrack.findings", {
       treeDataProvider: this,
@@ -67,15 +79,66 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
     this.disposables.push(this.view, this.changed);
   }
 
+  markFixed(id: string, isFixed = true): void {
+    if (isFixed) this.fixed.add(id);
+    else this.fixed.delete(id);
+    this.onFixedChanged?.(id, isFixed);
+    this.refresh();
+  }
+
+  isFixed(id: string): boolean {
+    return this.fixed.has(id);
+  }
+
+  /** Restore marks recorded on a previous visit to the same review. */
+  restoreFixed(ids: string[]): void {
+    this.fixed = new Set(ids);
+    this.refresh();
+  }
+
+  fixedIds(): string[] {
+    return [...this.fixed];
+  }
+
+  allFindings(): Finding[] {
+    return this.findings;
+  }
+
+  outstanding(): Finding[] {
+    return this.findings.filter((f) => !this.fixed.has(f.id));
+  }
+
+  private refresh(): void {
+    this.changed.fire(undefined);
+    this.updateHeader();
+  }
+
+  private updateHeader(): void {
+    const total = this.findings.length;
+    const done = this.findings.filter((f) => this.fixed.has(f.id)).length;
+    const left = total - done;
+
+    if (!total) {
+      this.view.badge = undefined;
+      this.view.title = "Findings";
+      return;
+    }
+    // The badge counts what is left to do, not what was found. A number that
+    // never moves as you work is just decoration.
+    this.view.badge = left
+      ? { value: left, tooltip: `${left} still to address` }
+      : { value: 0, tooltip: "All findings addressed" };
+    this.view.title = done ? `Findings (${done}/${total} fixed)` : `Findings (${total})`;
+  }
+
   setFindings(findings: Finding[], repoRoot = this.repoRoot): void {
     this.repoRoot = repoRoot;
     this.findings = findings;
     this.root = buildTree(findings);
-    this.changed.fire(undefined);
-    this.view.badge = findings.length
-      ? { value: findings.length, tooltip: `${findings.length} recommendation(s)` }
-      : undefined;
-    this.view.title = findings.length ? `Findings (${findings.length})` : "Findings";
+    // A new review is a new set of problems; carrying marks across would show
+    // last commit's progress against this commit's findings.
+    this.fixed.clear();
+    this.refresh();
   }
 
   clear(): void {
@@ -114,7 +177,13 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
       const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Expanded);
       item.resourceUri = vscode.Uri.joinPath(vscode.Uri.file(this.repoRoot), node.path);
       item.iconPath = vscode.ThemeIcon.File;
-      item.description = `${node.findings.length}`;
+      const done = node.findings.filter((f) => this.fixed.has(f.id)).length;
+      item.description =
+        done === 0
+          ? `${node.findings.length}`
+          : done === node.findings.length
+            ? `all ${done} fixed`
+            : `${done}/${node.findings.length} fixed`;
       item.contextValue = "file";
       item.tooltip = node.path;
       return item;
@@ -125,13 +194,22 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
 
   private findingItem(node: FindingNode): vscode.TreeItem {
     const f = node.finding;
+    const done = this.fixed.has(f.id);
     const item = new vscode.TreeItem(f.title, vscode.TreeItemCollapsibleState.None);
-    const icon = SEVERITY_ICON[f.severity] ?? SEVERITY_ICON.nit;
 
-    item.description = describe(f);
-    item.tooltip = tooltipFor(f);
-    item.iconPath = new vscode.ThemeIcon(icon.id, new vscode.ThemeColor(icon.color));
-    item.contextValue = "finding";
+    if (done) {
+      item.iconPath = new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("charts.green"));
+      item.description = "fixed";
+      // Distinct contextValue so the row offers "undo", not "mark fixed" again.
+      item.contextValue = "finding-fixed";
+    } else {
+      const icon = SEVERITY_ICON[f.severity] ?? SEVERITY_ICON.nit;
+      item.iconPath = new vscode.ThemeIcon(icon.id, new vscode.ThemeColor(icon.color));
+      item.description = describe(f);
+      item.contextValue = "finding-open";
+    }
+
+    item.tooltip = tooltipFor(f, done);
     item.command = {
       command: "crTrack.revealFinding",
       title: "Go to finding",
@@ -150,9 +228,10 @@ function describe(f: Finding): string {
   return `${f.severity} · line ${line}`;
 }
 
-function tooltipFor(f: Finding): vscode.MarkdownString {
+function tooltipFor(f: Finding, done = false): vscode.MarkdownString {
   const md = new vscode.MarkdownString(undefined, true);
   md.supportThemeIcons = true;
+  if (done) md.appendMarkdown("$(pass-filled) **Fixed**" + String.fromCharCode(10,10));
   md.appendMarkdown(`**${escapeMd(f.title)}**\n\n`);
   md.appendMarkdown(
     `$(circle-filled) ${f.severity} · ${f.category} · ` +

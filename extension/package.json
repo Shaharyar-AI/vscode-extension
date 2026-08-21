@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -74,6 +74,30 @@
         "command": "crTrack.revealFinding",
         "title": "Go to Finding",
         "category": "CR-Track"
+      },
+      {
+        "command": "crTrack.copyFinding",
+        "title": "Copy this finding",
+        "category": "CR-Track",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "crTrack.copyAllFindings",
+        "title": "Copy all outstanding findings",
+        "category": "CR-Track",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "crTrack.markFixed",
+        "title": "Mark as fixed",
+        "category": "CR-Track",
+        "icon": "$(check)"
+      },
+      {
+        "command": "crTrack.markNotFixed",
+        "title": "Mark as not fixed",
+        "category": "CR-Track",
+        "icon": "$(discard)"
       }
     ],
     "viewsContainers": {
@@ -104,6 +128,11 @@
     "menus": {
       "view/title": [
         {
+          "command": "crTrack.copyAllFindings",
+          "when": "view == crTrack.findings",
+          "group": "navigation@0"
+        },
+        {
           "command": "crTrack.reviewLastCommit",
           "when": "view == crTrack.findings",
           "group": "navigation@1"
@@ -133,6 +162,40 @@
         {
           "command": "crTrack.revealFinding",
           "when": "false"
+        },
+        {
+          "command": "crTrack.copyFinding",
+          "when": "false"
+        },
+        {
+          "command": "crTrack.markFixed",
+          "when": "false"
+        },
+        {
+          "command": "crTrack.markNotFixed",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "crTrack.copyFinding",
+          "when": "view == crTrack.findings && viewItem =~ /^finding/",
+          "group": "inline@1"
+        },
+        {
+          "command": "crTrack.markFixed",
+          "when": "view == crTrack.findings && viewItem == finding-open",
+          "group": "inline@2"
+        },
+        {
+          "command": "crTrack.markNotFixed",
+          "when": "view == crTrack.findings && viewItem == finding-fixed",
+          "group": "inline@2"
+        },
+        {
+          "command": "crTrack.copyFinding",
+          "when": "view == crTrack.findings && viewItem =~ /^finding/",
+          "group": "context@1"
         }
       ]
     },

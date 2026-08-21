@@ -30,6 +30,7 @@ function makeStub({ repo, answers = {}, onLog }) {
     fileWatchers: [],
     windowStateHandlers: [],
     logLines: [],
+    clipboard: "",
   };
 
   // Dialog answers are consumed in order; a missing script entry means
@@ -116,7 +117,7 @@ function makeStub({ repo, answers = {}, onLog }) {
     ProgressLocation: { SourceControl: 1, Window: 10, Notification: 15 },
     TextEditorRevealType: { InCenter: 2 },
     RelativePattern: class { constructor(base, pattern) { this.base = base; this.pattern = pattern; } },
-    env: { clipboard: { writeText: async () => {} } },
+    env: { clipboard: { writeText: async (t) => { state.clipboard = String(t); } } },
 
     window: {
       createOutputChannel: () => ({
@@ -159,6 +160,7 @@ function makeStub({ repo, answers = {}, onLog }) {
         return task({ report() {} }, token);
       },
       onDidChangeWindowState: (h) => { state.windowStateHandlers.push(h); return disposable(); },
+      setStatusBarMessage: () => ({ dispose() {} }),
       createTreeView: (id, opts) => {
         const view = { id, provider: opts.treeDataProvider, badge: undefined, title: undefined, dispose() {} };
         state.treeView = view;
@@ -243,8 +245,7 @@ function loadExtension(bundlePath) {
   return require(bundlePath);
 }
 
-function makeContext(extensionDir) {
-  const store = new Map();
+function makeContext(extensionDir, store = new Map()) {
   return {
     subscriptions: [],
     extensionPath: extensionDir,
@@ -252,6 +253,9 @@ function makeContext(extensionDir) {
     extension: { packageJSON: { version: "0.1.0" } },
     globalState: { get: (k) => store.get(k), update: async (k, v) => void store.set(k, v) },
     workspaceState: { get: (k) => store.get(k), update: async (k, v) => void store.set(k, v) },
+    // Exposed so a test can reopen a "new window" against the same stored
+    // state, which is the only way to prove anything survives a reload.
+    store,
   };
 }
 

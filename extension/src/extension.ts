@@ -10,7 +10,7 @@
  * way for the thing to be broken on someone else's machine.
  */
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as vscode from "vscode";
 import { readEndpoint, readSettings, type Settings } from "./config";
@@ -48,6 +48,11 @@ let session: Session | undefined;
 class Session implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private reviewing = false;
+  private currentCommit = "";
+
+  /** Persist which findings the developer has ticked off, and read them back. */
+  onProgress: ((commit: string, fixedIds: string[]) => void) | undefined;
+  restoreProgress: ((commit: string) => string[]) | undefined;
 
   constructor(
     readonly repos: RepoContext[],
@@ -82,6 +87,79 @@ class Session implements vscode.Disposable {
    * worst outcome available is a missing review — that must not escalate into
    * a broken editor.
    */
+  /**
+   * Put a set of findings on screen and hook up progress tracking.
+   *
+   * Shared by a fresh review and by the restore on startup, so a restored list
+   * behaves exactly like a live one — same green ticks, same counts, same
+   * squiggles. Two code paths here would mean two behaviours to keep in step.
+   */
+  private display(findings: Finding[], repoRoot: string, sha: string): void {
+    this.currentCommit = sha;
+    this.diagnostics.show(findings, repoRoot);
+    this.tree.setFindings(findings, repoRoot);
+
+    // Marking a finding done drops its squiggle too — a green row next to a
+    // live warning in the Problems panel is two answers to one question.
+    this.tree.onFixedChanged = (id, isFixed) => {
+      if (isFixed) {
+        this.diagnostics.remove(id);
+      } else {
+        this.diagnostics.show(
+          this.tree.allFindings().filter((f) => !this.tree.isFixed(f.id)),
+          repoRoot,
+        );
+      }
+      this.onProgress?.(this.currentCommit, this.tree.fixedIds());
+    };
+
+    const done = this.restoreProgress?.(sha) ?? [];
+    if (done.length) {
+      this.tree.restoreFixed(done);
+      for (const id of done) this.diagnostics.remove(id);
+    }
+  }
+
+  /**
+   * Reload the most recent review from disk on startup.
+   *
+   * The engine already writes every report to `.cr-track/last-review.json`, so
+   * the findings outlive the window; only the panel forgot them. Best-effort by
+   * design — a missing, truncated or older-format file just means an empty
+   * panel, which is exactly what it was before.
+   */
+  restoreLastReview(roots: string[]): void {
+    let best: { findings: Finding[]; root: string; sha: string; at: string } | undefined;
+
+    for (const root of roots) {
+      try {
+        const raw = readFileSync(join(root, ".cr-track", "last-review.json"), "utf8");
+        const doc = JSON.parse(raw) as {
+          findings?: Finding[];
+          review?: { commit?: { sha?: string }; completedAt?: string };
+        };
+        const findings = doc.findings ?? [];
+        const sha = doc.review?.commit?.sha;
+        if (!findings.length || !sha) continue;
+        const at = doc.review?.completedAt ?? "";
+        // Several repositories can each hold a report; the newest is the one
+        // the developer was last looking at.
+        if (!best || at > best.at) best = { findings, root, sha, at };
+      } catch {
+        // No report, unreadable, or not JSON — nothing to restore.
+      }
+    }
+
+    if (!best) return;
+    this.display(best.findings, best.root, best.sha);
+    const left = this.tree.outstanding().length;
+    log.info(
+      left
+        ? `Restored ${best.findings.length} finding(s) from the last review — ${left} still open`
+        : `Restored the last review — all ${best.findings.length} finding(s) marked fixed`,
+    );
+  }
+
   async reviewCommit(repoRoot: string, sha: string): Promise<void> {
     if (this.reviewing) {
       log.info("A review is already running — skipping this one");
@@ -144,8 +222,7 @@ class Session implements vscode.Disposable {
       }
 
       // Half one: show the developer what could be better.
-      this.diagnostics.show(result.findings, repoRoot);
-      this.tree.setFindings(result.findings, repoRoot);
+      this.display(result.findings, repoRoot, commit.sha);
       this.status.reviewed(result.findings.length, commit.shortSha);
       log.info(
         `${commit.shortSha}: ${result.findings.length} finding(s) in ` +
@@ -509,6 +586,28 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
     status,
   );
 
+  // Progress survives a reload: someone half-way through a list of findings
+  // should not lose their place because the window restarted.
+  const PROGRESS_KEY = "crTrack.fixed";
+  session.restoreProgress = (commit) => {
+    const all = context.workspaceState.get<Record<string, string[]>>(PROGRESS_KEY) ?? {};
+    return all[commit] ?? [];
+  };
+  session.onProgress = (commit, ids) => {
+    const all = context.workspaceState.get<Record<string, string[]>>(PROGRESS_KEY) ?? {};
+    all[commit] = ids;
+    // Keep only the most recent handful of commits; this is a convenience, not
+    // a record, and an unbounded map in workspace state is a slow leak.
+    const keys = Object.keys(all);
+    if (keys.length > 20) for (const k of keys.slice(0, keys.length - 20)) delete all[k];
+    void context.workspaceState.update(PROGRESS_KEY, all);
+  };
+
+  // Bring the last review back on screen. Without this the panel is empty
+  // after every window reload until the next commit, so a half-finished list
+  // of findings — and the progress through it — silently disappears.
+  session.restoreLastReview(repos.map((r) => r.root));
+
   disarmRecovery();
   lastDormant = undefined;
   const names = repos.map((r) => r.name).join(", ");
@@ -659,6 +758,63 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     log.info(`dashboard  : ${readEndpoint(folder?.uri.fsPath) ?? "(none — reports stay local)"}`);
     log.info(`model      : ${cfg.model} / effort ${cfg.effort}`);
     log.info("─────────────────────────────");
+  });
+
+  /**
+   * One finding, formatted to be pasted straight into an assistant.
+   *
+   * File and line first because that is what a reader needs to locate it, and
+   * the suggestion last because that is the part being acted on. Plain text,
+   * no markdown fences — it goes into a chat box as often as into a file.
+   */
+  function findingAsText(f: Finding): string {
+    const lines = f.lineStart === f.lineEnd ? `${f.lineStart}` : `${f.lineStart}-${f.lineEnd}`;
+    return [
+      `${f.file}:${lines}  [${f.severity} · ${f.category}]`,
+      f.title,
+      "",
+      f.description,
+      "",
+      `Suggested: ${f.suggestion}`,
+    ].join(String.fromCharCode(10));
+  }
+
+  const findingOf = (arg: unknown): Finding | undefined => {
+    const node = arg as { kind?: string; finding?: Finding } | undefined;
+    return node?.kind === "finding" ? node.finding : undefined;
+  };
+
+  register("crTrack.copyFinding", async (arg: unknown) => {
+    const f = findingOf(arg);
+    if (!f) return;
+    await vscode.env.clipboard.writeText(findingAsText(f));
+    void vscode.window.setStatusBarMessage("$(check) Finding copied", 2000);
+  });
+
+  register("crTrack.copyAllFindings", async () => {
+    const open = session?.tree.outstanding() ?? [];
+    if (!open.length) {
+      void vscode.window.showInformationMessage("CR-Track: nothing left to copy.");
+      return;
+    }
+    const text = open.map(findingAsText).join(String.fromCharCode(10) + String.fromCharCode(10) + "---" + String.fromCharCode(10) + String.fromCharCode(10));
+    await vscode.env.clipboard.writeText(text);
+    void vscode.window.setStatusBarMessage(
+      `$(check) Copied ${open.length} finding(s)`,
+      2500,
+    );
+  });
+
+  register("crTrack.markFixed", (arg: unknown) => {
+    const f = findingOf(arg);
+    if (!f || !session) return;
+    session.tree.markFixed(f.id, true);
+  });
+
+  register("crTrack.markNotFixed", (arg: unknown) => {
+    const f = findingOf(arg);
+    if (!f || !session) return;
+    session.tree.markFixed(f.id, false);
   });
 
   register("crTrack.revealFinding", async (arg: unknown) => {

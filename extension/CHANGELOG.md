@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0
+
+Working through the findings, rather than just reading them.
+
+- **Copy** on every finding — file, line, severity, the description and the
+  suggestion, formatted to paste straight into an assistant. **Copy all** in the
+  panel header does the outstanding ones in one go, and skips what is done.
+- **Mark as fixed** turns the row green, drops its squiggle, and leaves the rest
+  open so the next one to pick up is obvious. The title counts progress
+  (`Findings (2/8 fixed)`) and the badge counts what is *left*, not what was
+  found — a number that never moves as you work is only decoration.
+- Marks are made by hand. An edit does not prove a problem was solved, and a row
+  that turned green on its own would be a claim the extension cannot support.
+- **The panel survives a window reload.** Previously it was empty after every
+  restart until the next commit, so a half-finished list disappeared. The last
+  review is restored from `.cr-track/last-review.json`, green ticks included.
+
 ## 0.4.3
 
 **Finds Claude when it lives inside the Claude Code editor extension.**
