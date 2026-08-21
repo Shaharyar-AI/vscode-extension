@@ -19,6 +19,11 @@ import { DiagnosticsView } from "./diagnostics";
 import { initLog, log } from "./log";
 import { checkStartup, clearStartupCache } from "./startup";
 import { StatusBar } from "./status";
+import { verifyFixes } from "@engine/verify";
+import { reconcile } from "./reconcile";
+// Re-exported so the test suite exercises the code that actually ships, rather
+// than a separately compiled copy of it.
+export { reconcile } from "./reconcile";
 import { FindingsTree } from "./tree";
 import {
   checkRepo,
@@ -49,6 +54,9 @@ class Session implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private reviewing = false;
   private currentCommit = "";
+
+  /** What is on screen now, so the next review can say what it resolved. */
+  private lastFindings: Finding[] = [];
 
   /** Persist which findings the developer has ticked off, and read them back. */
   onProgress: ((commit: string, fixedIds: string[]) => void) | undefined;
@@ -94,7 +102,12 @@ class Session implements vscode.Disposable {
    * behaves exactly like a live one — same green ticks, same counts, same
    * squiggles. Two code paths here would mean two behaviours to keep in step.
    */
-  private display(findings: Finding[], repoRoot: string, sha: string): void {
+  private display(
+    findings: Finding[],
+    repoRoot: string,
+    sha: string,
+    resolvedIds: string[] = [],
+  ): void {
     this.currentCommit = sha;
     this.diagnostics.show(findings, repoRoot);
     this.tree.setFindings(findings, repoRoot);
@@ -113,11 +126,18 @@ class Session implements vscode.Disposable {
       this.onProgress?.(this.currentCommit, this.tree.fixedIds());
     };
 
-    const done = this.restoreProgress?.(sha) ?? [];
+    // Green comes from two places: the reviewer confirming a fix on re-read,
+    // and the developer ticking a box. Both mean the same thing to the panel.
+    const done = [...new Set([...resolvedIds, ...(this.restoreProgress?.(sha) ?? [])])];
     if (done.length) {
-      this.tree.restoreFixed(done);
+      this.tree.restoreFixed(done, resolvedIds);
       for (const id of done) this.diagnostics.remove(id);
     }
+
+    // Only what is still outstanding carries into the next review. A finding
+    // that has been dealt with is finished: carrying it forward would let a
+    // later commit that did not touch its file quietly turn it open again.
+    this.lastFindings = findings.filter((f) => !done.includes(f.id));
   }
 
   /**
@@ -138,7 +158,18 @@ class Session implements vscode.Disposable {
           findings?: Finding[];
           review?: { commit?: { sha?: string }; completedAt?: string };
         };
-        const findings = doc.findings ?? [];
+        // A file can be valid JSON and still not be a report — half-written,
+        // hand-edited, or from a future schema. Check the shape rather than
+        // trusting the extension, and drop anything that fails.
+        const findings = (Array.isArray(doc.findings) ? doc.findings : []).filter(
+          (f): f is Finding =>
+            !!f &&
+            typeof f.id === "string" &&
+            typeof f.file === "string" &&
+            typeof f.title === "string" &&
+            Number.isFinite(f.lineStart) &&
+            Number.isFinite(f.lineEnd),
+        );
         const sha = doc.review?.commit?.sha;
         if (!findings.length || !sha) continue;
         const at = doc.review?.completedAt ?? "";
@@ -151,7 +182,15 @@ class Session implements vscode.Disposable {
     }
 
     if (!best) return;
-    this.display(best.findings, best.root, best.sha);
+    try {
+      this.display(best.findings, best.root, best.sha);
+    } catch (err) {
+      // Restoring is a convenience. A report we cannot render must never stop
+      // the extension starting — the developer would lose reviews entirely,
+      // and for a reason nothing on screen would explain.
+      log.warn(`Could not restore the last review: ${String(err)}`);
+      return;
+    }
     const left = this.tree.outstanding().length;
     log.info(
       left
@@ -222,7 +261,35 @@ class Session implements vscode.Disposable {
       }
 
       // Half one: show the developer what could be better.
-      this.display(result.findings, repoRoot, commit.sha);
+      //
+      // Findings from the previous commit do not simply vanish. Anything the
+      // reviewer re-read and no longer objects to is shown green, so fixing
+      // something is visibly finishing it rather than watching it disappear.
+      const confirmed = await verifyFixes({
+        claudePath: this.claudePath,
+        repoRoot,
+        diff,
+        prior: this.lastFindings.map((f) => ({
+          id: f.id,
+          file: f.file,
+          lineStart: f.lineStart,
+          title: f.title,
+          description: f.description,
+        })),
+        model: cfg.model ?? "claude-opus-5",
+        timeoutMs: cfg.timeoutMs ?? 600_000,
+      });
+      const { findings: onScreen, resolvedIds } = reconcile(
+        this.lastFindings,
+        result.findings,
+        confirmed,
+      );
+      if (resolvedIds.length) {
+        log.info(
+          `${resolvedIds.length} finding(s) from the previous review are fixed — confirmed on re-read`,
+        );
+      }
+      this.display(onScreen, repoRoot, commit.sha, resolvedIds);
       this.status.reviewed(result.findings.length, commit.shortSha);
       log.info(
         `${commit.shortSha}: ${result.findings.length} finding(s) in ` +
@@ -595,11 +662,17 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
   };
   session.onProgress = (commit, ids) => {
     const all = context.workspaceState.get<Record<string, string[]>>(PROGRESS_KEY) ?? {};
+    // Re-inserting moves this commit to the end, so the map stays in
+    // least-recently-touched order. Without the delete, updating an existing
+    // commit leaves it at its original position and the pruning below can
+    // discard the very entry just written.
+    delete all[commit];
     all[commit] = ids;
-    // Keep only the most recent handful of commits; this is a convenience, not
-    // a record, and an unbounded map in workspace state is a slow leak.
+
+    // Keep only the most recent handful; this is a convenience, not a record,
+    // and an unbounded map in workspace state is a slow leak.
     const keys = Object.keys(all);
-    if (keys.length > 20) for (const k of keys.slice(0, keys.length - 20)) delete all[k];
+    for (const k of keys.slice(0, Math.max(0, keys.length - 20))) delete all[k];
     void context.workspaceState.update(PROGRESS_KEY, all);
   };
 
@@ -776,7 +849,7 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
       f.description,
       "",
       `Suggested: ${f.suggestion}`,
-    ].join(String.fromCharCode(10));
+    ].join("\n");
   }
 
   const findingOf = (arg: unknown): Finding | undefined => {
@@ -797,7 +870,7 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
       void vscode.window.showInformationMessage("CR-Track: nothing left to copy.");
       return;
     }
-    const text = open.map(findingAsText).join(String.fromCharCode(10) + String.fromCharCode(10) + "---" + String.fromCharCode(10) + String.fromCharCode(10));
+    const text = open.map(findingAsText).join("\n\n---\n\n");
     await vscode.env.clipboard.writeText(text);
     void vscode.window.setStatusBarMessage(
       `$(check) Copied ${open.length} finding(s)`,
@@ -818,8 +891,7 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
   });
 
   register("crTrack.revealFinding", async (arg: unknown) => {
-    const node = arg as { kind?: string; finding?: Finding } | undefined;
-    const finding = node?.kind === "finding" ? node.finding : undefined;
+    const finding = findingOf(arg);
     if (!finding || !session) return;
     try {
       const root = session.tree.currentRepoRoot() || session.repos[0]?.root || "";

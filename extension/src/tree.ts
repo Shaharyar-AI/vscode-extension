@@ -68,6 +68,13 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
    */
   private fixed = new Set<string>();
 
+  /**
+   * Of those, the ones the reviewer confirmed rather than the developer
+   * asserted. Both are green; only the wording differs, because "I fixed this"
+   * and "the reviewer agrees this is fixed" are not the same claim.
+   */
+  private verified = new Set<string>();
+
   /** Told when the fixed set changes, so it can be persisted and the squiggle dropped. */
   onFixedChanged: ((id: string, isFixed: boolean) => void) | undefined;
 
@@ -91,8 +98,9 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
   }
 
   /** Restore marks recorded on a previous visit to the same review. */
-  restoreFixed(ids: string[]): void {
+  restoreFixed(ids: string[], verified: string[] = []): void {
     this.fixed = new Set(ids);
+    this.verified = new Set(verified);
     this.refresh();
   }
 
@@ -199,7 +207,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
 
     if (done) {
       item.iconPath = new vscode.ThemeIcon("pass-filled", new vscode.ThemeColor("charts.green"));
-      item.description = "fixed";
+      item.description = this.verified.has(f.id) ? "fixed · confirmed" : "fixed";
       // Distinct contextValue so the row offers "undo", not "mark fixed" again.
       item.contextValue = "finding-fixed";
     } else {
@@ -209,7 +217,7 @@ export class FindingsTree implements vscode.TreeDataProvider<Node>, vscode.Dispo
       item.contextValue = "finding-open";
     }
 
-    item.tooltip = tooltipFor(f, done);
+    item.tooltip = tooltipFor(f, done, this.verified.has(f.id));
     item.command = {
       command: "crTrack.revealFinding",
       title: "Go to finding",
@@ -228,10 +236,17 @@ function describe(f: Finding): string {
   return `${f.severity} · line ${line}`;
 }
 
-function tooltipFor(f: Finding, done = false): vscode.MarkdownString {
+function tooltipFor(f: Finding, done = false, verified = false): vscode.MarkdownString {
   const md = new vscode.MarkdownString(undefined, true);
   md.supportThemeIcons = true;
-  if (done) md.appendMarkdown("$(pass-filled) **Fixed**" + String.fromCharCode(10,10));
+  if (done) {
+    md.appendMarkdown(
+      verified
+        ? "$(pass-filled) **Fixed** — the reviewer re-read this file and did not raise it again."
+        : "$(pass-filled) **Fixed** — marked by you.",
+    );
+    md.appendMarkdown("\n\n");
+  }
   md.appendMarkdown(`**${escapeMd(f.title)}**\n\n`);
   md.appendMarkdown(
     `$(circle-filled) ${f.severity} · ${f.category} · ` +

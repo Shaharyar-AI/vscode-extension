@@ -31,6 +31,7 @@ function makeStub({ repo, answers = {}, onLog }) {
     windowStateHandlers: [],
     logLines: [],
     clipboard: "",
+    opened: [],
   };
 
   // Dialog answers are consumed in order; a missing script entry means
@@ -148,7 +149,21 @@ function makeStub({ repo, answers = {}, onLog }) {
         state.inputs.push(opts?.title ?? opts?.prompt ?? "");
         return queues.input.shift();
       },
-      showTextDocument: async () => ({ revealRange() {}, set selection(_v) {} }),
+      // Records what was opened and where the cursor landed, so a test can
+      // prove that clicking a finding goes to the right line.
+      showTextDocument: async (doc, opts) => {
+        state.opened.push({
+          path: String(doc?.uri?.fsPath ?? doc?.fsPath ?? doc),
+          line: opts?.selection?.start?.line,
+        });
+        return {
+          revealRange() {},
+          set selection(v) {
+            const last = state.opened[state.opened.length - 1];
+            if (last && v?.start) last.line = v.start.line;
+          },
+        };
+      },
       withProgress: async (_o, task) => {
         // A real CancellationToken shape. The previous placeholder lacked
         // onCancellationRequested, so any code registering for cancellation

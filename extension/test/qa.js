@@ -596,6 +596,17 @@ export async function transfer(from: string, to: string, amount: any) {
         "fixed finding excluded",
         "a finding already marked fixed was copied again");
 
+      // ---- clicking the row -----------------------------------------------
+      state.opened.length = 0;
+      await run(state, "crTrack.revealFinding", first);
+      const went = state.opened[state.opened.length - 1];
+      check("Clicking a finding opens the file it is about",
+        !!went && went.path.split(path.sep).join("/").endsWith(first.finding.file),
+        went?.path);
+      check("...at the line it points at",
+        went?.line === first.finding.lineStart - 1,
+        `line ${went?.line} for finding line ${first.finding.lineStart}`);
+
       // ---- undo -----------------------------------------------------------
       await run(state, "crTrack.markNotFixed", first);
       const undone = (await walkTree(state)).find(
@@ -648,6 +659,74 @@ export async function transfer(from: string, to: string, amount: any) {
       [...second.state.diagnostics.values()].flat().length === before.length - 2,
       `${[...second.state.diagnostics.values()].flat().length} squiggles`);
     second.restore();
+  }
+
+  section("6e. A fix confirmed by the reviewer turns the row green");
+  {
+    // Exercise the shipped bundle, not a separate build of the same source.
+    const { vscode: stubbed } = makeStub({ repo: EXT_DIR });
+    const undo = install(stubbed);
+    const { reconcile } = loadExtension(BUNDLE);
+    undo();
+    const prior = (id, file, title) => ({
+      id, file, title, lineStart: 10, lineEnd: 12,
+      severity: "important", category: "correctness",
+      description: "d", suggestion: "s",
+    });
+
+    const previous = [
+      prior("f1", "src/a.ts", "Unchecked null dereference in the parser"),
+      prior("f2", "src/a.ts", "Progress pruning evicts the newest entry"),
+      prior("f3", "src/b.ts", "Timeout is shorter than the documented cold start"),
+    ];
+
+    // Only f1 was confirmed fixed by the reviewer.
+    const r = reconcile(previous, [], ["f1"]);
+    check("The confirmed one is marked fixed", r.resolvedIds.join() === "f1", r.resolvedIds.join());
+    check("...and the unconfirmed ones are not",
+      !r.resolvedIds.includes("f2") && !r.resolvedIds.includes("f3"),
+      "f2, f3 left open",
+      "a finding went green without the reviewer confirming it");
+    check("...while all three stay on the list",
+      r.findings.length === 3, `${r.findings.length}`);
+
+    // The dangerous case: silence must never be read as success.
+    const silent = reconcile(previous, [], []);
+    check("Nothing goes green when the reviewer confirms nothing",
+      silent.resolvedIds.length === 0, "none",
+      "absence from a review was treated as evidence of a fix");
+
+    // A problem raised again replaces the old copy rather than doubling it.
+    const again = reconcile(
+      previous,
+      [prior("n1", "src/a.ts", "Unchecked null dereference in the parser")],
+      [],
+    );
+    check("A problem reported again appears once, not twice",
+      again.findings.filter((f) => f.title.includes("null dereference")).length === 1,
+      `${again.findings.length} total`);
+    check("...and the fresh copy is the one kept",
+      again.findings.some((f) => f.id === "n1") && !again.findings.some((f) => f.id === "f1"),
+      "fresh copy kept");
+
+    // Line numbers shift when a file is edited; identity must not depend on them.
+    const moved = prior("n2", "src/a.ts", "Unchecked null dereference in the parser");
+    moved.lineStart = 210;
+    moved.lineEnd = 214;
+    const shifted = reconcile(previous, [moved], []);
+    check("A problem that moved down the file is still the same problem",
+      shifted.findings.filter((f) => f.file === "src/a.ts").length === 2,
+      `${shifted.findings.filter((f) => f.file === "src/a.ts").length} in src/a.ts`,
+      "an edit that shifted line numbers duplicated the finding");
+
+    // Same words, different file, is a different problem.
+    const elsewhere = reconcile(
+      previous,
+      [prior("n3", "src/zzz.ts", "Unchecked null dereference in the parser")],
+      [],
+    );
+    check("The same wording in another file is a separate problem",
+      elsewhere.findings.length === 4, `${elsewhere.findings.length}`);
   }
 
   // ── 7. The report ──────────────────────────────────────────────────────

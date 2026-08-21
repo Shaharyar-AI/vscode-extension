@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.6.0
+
+Fixing a problem now marks it fixed.
+
+- **A finding turns green when the reviewer confirms the fix.** After each
+  commit the outstanding findings go back to Claude with the new diff and the
+  question "which of these does this actually fix?". Confirmed ones turn green
+  and read `fixed - confirmed`; everything else carries forward unchanged.
+- **Silence is never treated as success.** A review sees a diff, not a whole
+  file, so a problem can go unmentioned simply because nobody looked at it. Only
+  an explicit confirmation turns a row green - being unsure leaves it open,
+  because telling someone a bug is fixed when it is not is the one failure that
+  actually costs them something.
+- Findings now survive the commit that fixed them instead of vanishing, so you
+  can see what you have dealt with, not only what is left.
+
+Fixes found by CR-Track reviewing its own 0.5.0 release:
+
+- A malformed `last-review.json` threw out of startup and stopped the extension
+  activating at all. Reports are shape-checked now, and restoring can never take
+  activation down with it.
+- Progress pruning evicted by first-insertion order and could discard the entry
+  it had just written.
+- `revealFinding` kept its own copy of the node-unwrapping logic. Clicking a
+  finding now has a test, which it never had before.
+
 ## 0.5.0
 
 Working through the findings, rather than just reading them.

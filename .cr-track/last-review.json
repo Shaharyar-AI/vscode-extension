@@ -3,22 +3,22 @@
   "source": "claude-code-skill",
   "ruleset": "coderabbit-style@2.0",
   "review": {
-    "id": "f0c94d72-152d-4867-9627-4eca72106ef3",
-    "triggeredAt": "2026-08-20T17:17:45.498Z",
-    "completedAt": "2026-08-20T17:20:27.815Z",
-    "durationMs": 161958,
+    "id": "d5ff7f5c-4ada-4605-af70-13afc827af81",
+    "triggeredAt": "2026-08-21T09:47:22.332Z",
+    "completedAt": "2026-08-21T09:50:01.016Z",
+    "durationMs": 157329,
     "status": "completed",
     "mode": "committed",
     "model": "claude-opus-5",
     "effort": "medium",
     "secondPass": false,
     "commit": {
-      "sha": "b84286ecd19951e431cb3947c19ad8e06233a534",
-      "shortSha": "b84286e",
-      "message": "Add a PowerShell installer, because curl | bash is a Unix idiom",
+      "sha": "ae65d344b02ff6351066b2a2af5d5ece394d6873",
+      "shortSha": "ae65d34",
+      "message": "Let developers work through findings, not just read them (0.5.0)",
       "authorName": "Shaharyar-AI",
       "authorEmail": "shaharyar_shabbir@ikonicsolution.com",
-      "authoredAt": "2026-08-20T22:17:43+05:00"
+      "authoredAt": "2026-08-21T14:47:20+05:00"
     }
   },
   "developer": {
@@ -31,67 +31,81 @@
     "remote": "https://github.com/ikonic-git-admin/claude-skills.git",
     "branch": "main",
     "baseBranch": "main",
-    "commitBefore": "b84286e",
-    "isDirty": true,
+    "commitBefore": "ae65d34",
+    "isDirty": false,
     "host": "github.com",
     "owner": "ikonic-git-admin",
     "repo": "claude-skills"
   },
   "project": {
-    "primaryLanguage": "PowerShell"
+    "primaryLanguage": "JSON"
   },
   "diffStats": {
-    "filesChanged": 7,
-    "linesAdded": 883,
-    "linesRemoved": 87,
+    "filesChanged": 9,
+    "linesAdded": 572,
+    "linesRemoved": 137,
     "files": [
       {
         "path": ".cr-track/last-review.json",
         "language": "JSON",
-        "linesAdded": 110,
-        "linesRemoved": 77,
+        "linesAdded": 115,
+        "linesRemoved": 114,
         "changeType": "modified"
       },
       {
-        "path": "dashboard/README.md",
-        "language": "Markdown",
-        "linesAdded": 37,
-        "linesRemoved": 4,
+        "path": "dashboard/public/version.txt",
+        "language": null,
+        "linesAdded": 1,
+        "linesRemoved": 1,
         "changeType": "modified"
       },
       {
-        "path": "dashboard/public/doctor.ps1",
-        "language": "PowerShell",
-        "linesAdded": 149,
-        "linesRemoved": 0,
-        "changeType": "added"
+        "path": "dist-r2/version.txt",
+        "language": null,
+        "linesAdded": 1,
+        "linesRemoved": 1,
+        "changeType": "modified"
       },
       {
-        "path": "dashboard/public/install.ps1",
-        "language": "PowerShell",
-        "linesAdded": 210,
-        "linesRemoved": 0,
-        "changeType": "added"
-      },
-      {
-        "path": "dist-r2/doctor.ps1",
-        "language": "PowerShell",
-        "linesAdded": 149,
-        "linesRemoved": 0,
-        "changeType": "added"
-      },
-      {
-        "path": "dist-r2/install.ps1",
-        "language": "PowerShell",
-        "linesAdded": 210,
-        "linesRemoved": 0,
-        "changeType": "added"
-      },
-      {
-        "path": "docs/TESTING.md",
+        "path": "extension/CHANGELOG.md",
         "language": "Markdown",
-        "linesAdded": 18,
-        "linesRemoved": 6,
+        "linesAdded": 17,
+        "linesRemoved": 0,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/package.json",
+        "language": "JSON",
+        "linesAdded": 64,
+        "linesRemoved": 1,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/src/extension.ts",
+        "language": "TypeScript",
+        "linesAdded": 159,
+        "linesRemoved": 3,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/src/tree.ts",
+        "language": "TypeScript",
+        "linesAdded": 91,
+        "linesRemoved": 12,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/test/qa.js",
+        "language": "JavaScript",
+        "linesAdded": 117,
+        "linesRemoved": 2,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/test/stub.js",
+        "language": "JavaScript",
+        "linesAdded": 7,
+        "linesRemoved": 3,
         "changeType": "modified"
       }
     ]
@@ -99,16 +113,16 @@
   "findings": [
     {
       "id": "f1",
-      "file": "dashboard/public/doctor.ps1",
-      "lineStart": 91,
-      "lineEnd": 96,
+      "file": "extension/src/extension.ts",
+      "lineStart": 153,
+      "lineEnd": 154,
       "severity": "important",
       "category": "correctness",
-      "title": "Doctor searches only ~/.vscode/extensions while the extension searches five roots",
-      "description": "The header promises it \"checks every precondition the extension checks, in the same order\", but `engine/src/claude-cli.ts` scans .vscode, .vscode-insiders/.vscode-oss, .cursor, .cursor-server and .windsurf, and also probes `resources/claude.exe` and `bin/claude.exe` layouts. A Cursor or Windsurf user with a bundled Claude gets \"no claude binary found anywhere this script looked\" from the doctor while the extension finds it — the doctor then sends them off installing something they already have.",
-      "suggestion": "Mirroring the root list and the two fallback layouts from claude-cli.ts would keep the doctor's verdict aligned with what the extension actually does.",
+      "title": "A parseable but malformed last-review.json throws out of restoreLastReview and aborts startup",
+      "description": "The try/catch only wraps the read and JSON.parse; the display() call sits outside it. The parsed doc is cast to Finding[] with no validation beyond \"non-empty array and a sha\", so a report from an older format — or one where a finding lacks `file` — reaches buildTree, where `f.file.split(...)` throws a TypeError. restoreLastReview is called from startInner, whose only handler is start()'s catch, which logs \"Startup failed\" and sets the status bar dormant. That contradicts the method's stated intent (\"a missing, truncated or older-format file just means an empty panel\") and turns a stale file on disk into a window where CR-Track looks broken.",
+      "suggestion": "Consider wrapping the display() call so a bad report degrades to an empty panel as documented, rather than escaping into the startup path. Validating each entry has `id`, `file` and numeric `lineStart` before displaying would be a stronger version of the same guard.",
       "confidence": 0.7,
-      "hadPatch": false,
+      "hadPatch": true,
       "status": "proposed",
       "accepted": false,
       "dismissReason": null,
@@ -116,14 +130,14 @@
     },
     {
       "id": "f2",
-      "file": "dashboard/public/install.ps1",
-      "lineStart": 143,
-      "lineEnd": 148,
-      "severity": "important",
+      "file": "extension/src/extension.ts",
+      "lineStart": 597,
+      "lineEnd": 598,
+      "severity": "nit",
       "category": "correctness",
-      "title": "Zip-header check throws instead of reporting on a short or empty download",
-      "description": "`[IO.File]::ReadAllBytes($vsix)[0..1]` on a zero-byte file yields $null, and `$head[0]` then raises \"Cannot index into a null array\" under $ErrorActionPreference='Stop' — the user gets a red PowerShell exception rather than the friendly message this block exists to print. It also loads the whole multi-megabyte file to inspect two bytes.",
-      "suggestion": "Reading just the first two bytes off a stream and treating a short read as a failed download would keep the intended message on every path.",
+      "title": "Progress pruning evicts by first-insertion order, so it can drop the commit just written",
+      "description": "Object.keys() returns string keys in insertion order, and assigning to an existing key does not move it to the end. Once the map holds more than 20 commits, a developer still working through an older review has their key sitting near the front — so the very entry just written by this callback can be deleted by the prune on the same call, losing the tick they just made. Rare, but it fails in exactly the case the feature exists for: a long-lived list someone returns to.",
+      "suggestion": "Deleting the key before re-assigning it makes insertion order match recency, which is what the prune below already assumes.",
       "confidence": 0.6,
       "hadPatch": true,
       "status": "proposed",
@@ -133,15 +147,15 @@
     },
     {
       "id": "f3",
-      "file": "dashboard/public/install.ps1",
-      "lineStart": 156,
-      "lineEnd": 161,
-      "severity": "important",
-      "category": "correctness",
-      "title": "\"Try manually\" points at a .vsix the finally block has already deleted",
-      "description": "When the post-install version check fails, the script prints a manual command referencing $vsix, then returns — and the enclosing `finally` immediately removes $tmp recursively, so the file is gone before the user can copy the command. The bash installer avoids this by never cleaning up its mktemp dir, which is why the same message works there.",
-      "suggestion": "Consider copying the .vsix somewhere durable (or skipping the cleanup) on this failure path before printing the command, so the suggested recovery step is actually runnable.",
-      "confidence": 0.85,
+      "file": "extension/src/extension.ts",
+      "lineStart": 800,
+      "lineEnd": 800,
+      "severity": "nit",
+      "category": "maintainability",
+      "title": "String.fromCharCode(10) where a newline literal would read plainly",
+      "description": "The separator is four String.fromCharCode(10) calls concatenated around a \"---\", which takes a moment to decode into \"\\n\\n---\\n\\n\". The same pattern appears at extension.ts:779 (the join in findingAsText) and tree.ts:234. Nothing here needs to avoid a literal newline escape, and the indirection hides what the copied text actually looks like.",
+      "suggestion": "Consider using \"\\n\" directly in these three places — the intent is then visible at a glance.",
+      "confidence": 0.72,
       "hadPatch": true,
       "status": "proposed",
       "accepted": false,
@@ -150,66 +164,15 @@
     },
     {
       "id": "f4",
-      "file": "dashboard/public/install.ps1",
-      "lineStart": 184,
-      "lineEnd": 188,
-      "severity": "important",
-      "category": "correctness",
-      "title": "Bundled-Claude lookup sorts extension folders lexically, not by version",
-      "description": "`Sort-Object Name -Descending` orders `anthropic.claude-code-1.9.0` above `anthropic.claude-code-1.10.0`, so on a machine with several versions left behind the stale one is picked. This is the same defect already recorded against `engine/src/claude-cli.ts:103-106`, now duplicated in both .ps1 scripts (`doctor.ps1:92-96` too).",
-      "suggestion": "Consider parsing the trailing version out of the folder name and sorting on it (falling back to a low version when it doesn't parse), so the newest bundled binary wins here and in doctor.ps1.",
+      "file": "extension/src/extension.ts",
+      "lineStart": 821,
+      "lineEnd": 823,
+      "severity": "nit",
+      "category": "maintainability",
+      "title": "revealFinding still inlines the node-unwrapping that findingOf now does",
+      "description": "findingOf was introduced a few lines above for exactly this shape check, but revealFinding kept its own copy. Two places to change if the tree node shape ever gains a variant.",
+      "suggestion": "Reusing findingOf here would leave one definition of what counts as a finding node.",
       "confidence": 0.8,
-      "hadPatch": false,
-      "status": "proposed",
-      "accepted": false,
-      "dismissReason": null,
-      "detectedBy": "llm"
-    },
-    {
-      "id": "f5",
-      "file": "dist-r2/install.ps1",
-      "lineStart": 1,
-      "lineEnd": 11,
-      "severity": "important",
-      "category": "correctness",
-      "title": "publish-r2.js never uploads the .ps1 scripts, so the R2 copies are unreachable",
-      "description": "`dist-r2/publish-r2.js` uploads install.sh, doctor.sh, version.txt and the .vsix only. The two new .ps1 files sit in dist-r2 but are never published, so `irm <r2-host>/install.ps1 | iex` 404s; only the Vercel-served `dashboard/public` copies work. The header comment advertising the one-liner is accurate for Vercel but not for the R2 channel these files live in.",
-      "suggestion": "Either add install.ps1/doctor.ps1 to the upload list in publish-r2.js (alongside doctor.sh), or drop the dist-r2 copies so there is one obvious source of truth for the Windows path.",
-      "confidence": 0.75,
-      "hadPatch": false,
-      "status": "proposed",
-      "accepted": false,
-      "dismissReason": null,
-      "detectedBy": "llm"
-    },
-    {
-      "id": "f6",
-      "file": "dashboard/public/install.ps1",
-      "lineStart": 68,
-      "lineEnd": 71,
-      "severity": "nit",
-      "category": "maintainability",
-      "title": "Placeholder guard can never fire and doesn't match the sh placeholder",
-      "description": "$base defaults to a real host and nothing rewrites this file at publish time, so the branch is unreachable today. If it were later wired into publish-r2.js it still wouldn't fire: install.sh uses `REPLACE_WITH_R2_HOST`, which does not contain the substring `REPLACE_WITH_HOST` this test looks for.",
-      "suggestion": "Either align the token with install.sh's `REPLACE_WITH_R2_HOST` and default $base to the placeholder, or drop the branch as dead code.",
-      "confidence": 0.7,
-      "hadPatch": false,
-      "status": "proposed",
-      "accepted": false,
-      "dismissReason": null,
-      "detectedBy": "llm"
-    },
-    {
-      "id": "f7",
-      "file": "dashboard/public/install.ps1",
-      "lineStart": 173,
-      "lineEnd": 177,
-      "severity": "nit",
-      "category": "maintainability",
-      "title": "Installer's Claude probe list omits a path doctor.ps1 checks",
-      "description": "doctor.ps1 also probes `$env:USERPROFILE\\.claude\\local\\claude.exe`; the installer's list stops one entry short. A user with that layout gets the \"Claude CLI was not found\" warning from the installer and an \"ok\" from the doctor moments later, which reads as one of the two being broken.",
-      "suggestion": "Keeping the two lists identical would avoid the contradictory advice.",
-      "confidence": 0.75,
       "hadPatch": true,
       "status": "proposed",
       "accepted": false,
@@ -219,30 +182,30 @@
   ],
   "changes": [],
   "summary": {
-    "findingsTotal": 7,
+    "findingsTotal": 4,
     "bySeverity": {
       "blocking": 0,
-      "important": 5,
-      "nit": 2,
+      "important": 1,
+      "nit": 3,
       "suggestion": 0
     },
     "byCategory": {
-      "correctness": 5,
+      "correctness": 2,
       "maintainability": 2
     },
     "applied": 0,
     "dismissed": 0,
-    "outstanding": 7,
-    "patchesOffered": 3,
+    "outstanding": 4,
+    "patchesOffered": 4,
     "reviewerTimeSavedMin": 0
   },
   "client": {
     "surface": "vscode-extension",
-    "extensionVersion": "0.4.0",
+    "extensionVersion": "0.4.3",
     "cliVersion": "2.1.237",
     "host": "DESKTOP-NBRJDA2",
     "os": "win32",
-    "nodeVersion": "v24.18.0",
+    "nodeVersion": "v24.18.1",
     "ci": false
   }
 }
