@@ -165,7 +165,7 @@ export function buildReport(input: ReportInput): { report: Report; redactionHits
       baseBranch: repo.baseBranch,
       commitBefore: repo.headShort,
       isDirty: repo.isDirty,
-      ...parseRemote(repo.remote),
+      ...qualifiedRemote(repo.remote),
     },
     ...(primaryLanguage(stats.files.map((f) => f.path))
       ? { project: { primaryLanguage: primaryLanguage(stats.files.map((f) => f.path)) } }
@@ -230,6 +230,19 @@ function safeHostname(): string {
 }
 
 /** Split a remote URL into host/owner/repo. Handles ssh and https forms. */
+/**
+ * The remote, with `repo` qualified by its owner.
+ *
+ * Consumers key on `repository.repo`, and a bare name collides the moment two
+ * organisations both have a "backend". `owner` and `host` stay alongside it for
+ * anything that wants the parts separately.
+ */
+function qualifiedRemote(remote: string): ReturnType<typeof parseRemote> {
+  const parsed = parseRemote(remote);
+  if (!parsed?.owner || !parsed.repo) return parsed;
+  return { ...parsed, repo: `${parsed.owner}/${parsed.repo}` };
+}
+
 function parseRemote(remote: string): Record<string, string> {
   if (!remote) return {};
   const cleaned = remote.replace(/\.git$/, "").replace(/\/+$/, "");

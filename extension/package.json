@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -98,6 +98,11 @@
         "title": "Mark as not fixed",
         "category": "CR-Track",
         "icon": "$(discard)"
+      },
+      {
+        "command": "crTrack.setIngestToken",
+        "title": "Set ingest token",
+        "category": "CR-Track"
       }
     ],
     "viewsContainers": {

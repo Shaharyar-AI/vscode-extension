@@ -25,6 +25,7 @@ function makeStub({ repo, answers = {}, onLog }) {
     commands: new Map(),
     messages: [],
     inputs: [],
+    inputOptions: [],
     treeView: undefined,
     contexts: new Map(),
     fileWatchers: [],
@@ -146,7 +147,10 @@ function makeStub({ repo, answers = {}, onLog }) {
         return undefined;
       },
       showInputBox: async (opts) => {
+        // Keep the whole options object, not just its title: whether a prompt
+        // masks what is typed is a property worth being able to test.
         state.inputs.push(opts?.title ?? opts?.prompt ?? "");
+        state.inputOptions.push(opts || {});
         return queues.input.shift();
       },
       // Records what was opened and where the cursor landed, so a test can
@@ -268,6 +272,14 @@ function makeContext(extensionDir, store = new Map()) {
     extension: { packageJSON: { version: "0.1.0" } },
     globalState: { get: (k) => store.get(k), update: async (k, v) => void store.set(k, v) },
     workspaceState: { get: (k) => store.get(k), update: async (k, v) => void store.set(k, v) },
+    // SecretStorage, backed by the same carried-forward store so a test can
+    // prove a token survives a reload the way the real one does.
+    secrets: {
+      get: async (k) => store.get("secret:" + k),
+      store: async (k, v) => void store.set("secret:" + k, v),
+      delete: async (k) => void store.delete("secret:" + k),
+      onDidChange: () => ({ dispose() {} }),
+    },
     // Exposed so a test can reopen a "new window" against the same stored
     // state, which is the only way to prove anything survives a reload.
     store,

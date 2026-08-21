@@ -19,6 +19,17 @@ export interface DeliveryResult {
   queued: boolean;
   status?: number;
   detail?: string;
+  /**
+   * Set when the server rejected the report for a reason retrying cannot fix.
+   *
+   * "auth" is a missing, wrong or revoked token; "payload" is a report the
+   * server considers malformed. Both are permanent until someone acts, so
+   * neither is queued — a queue full of reports that can never succeed hides
+   * the problem instead of surfacing it.
+   */
+  permanentFailure?: "auth" | "payload";
+  /** For a 422, the per-problem list the server sent back. */
+  details?: string[];
 }
 
 const DIR = ".cr-track";
@@ -59,6 +70,23 @@ export async function deliver(
   const sent = await post(options.endpoint, body, options.token, options.timeoutMs ?? 15_000);
   if (sent.ok) {
     return { localPath, uploaded: true, queued: false, status: sent.status };
+  }
+
+  // 401 and 422 will fail identically however many times they are retried: one
+  // needs a new token, the other a different payload. Queueing them buries a
+  // problem the developer has to be told about, and fills the queue with work
+  // that can never drain.
+  const permanent = permanentKind(sent.status);
+  if (permanent) {
+    return {
+      localPath,
+      uploaded: false,
+      queued: false,
+      status: sent.status,
+      permanentFailure: permanent,
+      ...(sent.details ? { details: sent.details } : {}),
+      detail: sent.detail,
+    };
   }
 
   enqueue(repoRoot, report, body);
@@ -133,6 +161,25 @@ interface PostResult {
   ok: boolean;
   status?: number;
   detail?: string;
+  details?: string[];
+}
+
+function permanentKind(status: number | undefined): "auth" | "payload" | undefined {
+  if (status === 401 || status === 403) return "auth";
+  if (status === 422 || status === 400) return "payload";
+  return undefined;
+}
+
+/** Pull the `details` array out of a 422 body, if the server sent one. */
+function readDetails(text: string): string[] | undefined {
+  try {
+    const body = JSON.parse(text) as { details?: unknown };
+    if (!Array.isArray(body.details)) return undefined;
+    const list = body.details.map((d) => String(d)).filter(Boolean);
+    return list.length ? list : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function post(
@@ -155,7 +202,13 @@ async function post(
     });
     if (res.ok) return { ok: true, status: res.status };
     const text = await res.text().catch(() => "");
-    return { ok: false, status: res.status, detail: text.slice(0, 200) };
+    const details = readDetails(text);
+    return {
+      ok: false,
+      status: res.status,
+      detail: text.slice(0, 300),
+      ...(details ? { details } : {}),
+    };
   } catch (err) {
     const message = (err as Error).name === "AbortError" ? "timed out" : (err as Error).message;
     return { ok: false, detail: message };

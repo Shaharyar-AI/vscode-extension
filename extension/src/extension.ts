@@ -10,7 +10,7 @@
  * way for the thing to be broken on someone else's machine.
  */
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as vscode from "vscode";
 import { readEndpoint, readSettings, type Settings } from "./config";
@@ -50,6 +50,26 @@ import type { DiffStats, Finding, RepoContext } from "@engine/types";
 let session: Session | undefined;
 
 /** Live while a repository and a usable Claude CLI are both present. */
+/**
+ * Findings from a file we did not write in this session.
+ *
+ * A file can be valid JSON and still not hold findings — half-written, hand
+ * edited, or from a version that shaped them differently. Check each one and
+ * drop what fails, rather than trusting the extension on the filename.
+ */
+function usableFindings(input: unknown): Finding[] {
+  if (!Array.isArray(input)) return [];
+  return input.filter(
+    (f): f is Finding =>
+      !!f &&
+      typeof f.id === "string" &&
+      typeof f.file === "string" &&
+      typeof f.title === "string" &&
+      Number.isFinite(f.lineStart) &&
+      Number.isFinite(f.lineEnd),
+  );
+}
+
 class Session implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private reviewing = false;
@@ -57,6 +77,13 @@ class Session implements vscode.Disposable {
 
   /** What is on screen now, so the next review can say what it resolved. */
   private lastFindings: Finding[] = [];
+
+  /** Where panel state is saved, and which of the rows were reviewer-confirmed. */
+  private panelRoot = "";
+  private verifiedIds: string[] = [];
+
+  /** Supplied by activate(); Session should not know where secrets live. */
+  ingestToken: (() => Promise<string | undefined>) | undefined;
 
   /** Persist which findings the developer has ticked off, and read them back. */
   onProgress: ((commit: string, fixedIds: string[]) => void) | undefined;
@@ -106,9 +133,13 @@ class Session implements vscode.Disposable {
     findings: Finding[],
     repoRoot: string,
     sha: string,
-    resolvedIds: string[] = [],
+    verifiedIds: string[] = [],
+    alreadyFixed: string[] = [],
+    persist = true,
   ): void {
     this.currentCommit = sha;
+    this.panelRoot = repoRoot;
+    this.verifiedIds = verifiedIds;
     this.diagnostics.show(findings, repoRoot);
     this.tree.setFindings(findings, repoRoot);
 
@@ -124,13 +155,16 @@ class Session implements vscode.Disposable {
         );
       }
       this.onProgress?.(this.currentCommit, this.tree.fixedIds());
+      this.savePanel(this.tree.allFindings(), this.tree.fixedIds());
     };
 
     // Green comes from two places: the reviewer confirming a fix on re-read,
     // and the developer ticking a box. Both mean the same thing to the panel.
-    const done = [...new Set([...resolvedIds, ...(this.restoreProgress?.(sha) ?? [])])];
+    const done = [
+      ...new Set([...verifiedIds, ...alreadyFixed, ...(this.restoreProgress?.(sha) ?? [])]),
+    ];
     if (done.length) {
-      this.tree.restoreFixed(done, resolvedIds);
+      this.tree.restoreFixed(done, verifiedIds);
       for (const id of done) this.diagnostics.remove(id);
     }
 
@@ -138,6 +172,43 @@ class Session implements vscode.Disposable {
     // that has been dealt with is finished: carrying it forward would let a
     // later commit that did not touch its file quietly turn it open again.
     this.lastFindings = findings.filter((f) => !done.includes(f.id));
+
+    if (persist) this.savePanel(findings, done);
+  }
+
+  /**
+   * What the panel is showing, saved so a reload can show the same thing.
+   *
+   * Deliberately not last-review.json. That file is the report the dashboard
+   * receives, and it must describe one commit — adding findings carried over
+   * from earlier commits would inflate the counts a review is judged on. This
+   * file is local panel state and nothing else reads it.
+   */
+  private savePanel(findings: Finding[], fixed: string[]): void {
+    if (!this.panelRoot) return;
+    try {
+      const dir = join(this.panelRoot, ".cr-track");
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, "panel.json"),
+        JSON.stringify(
+          {
+            version: 1,
+            commit: this.currentCommit,
+            savedAt: new Date().toISOString(),
+            fixed,
+            verified: this.verifiedIds,
+            findings,
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+    } catch {
+      // Panel state is a convenience. Failing to save it must never affect a
+      // review, so there is nothing useful to do here but carry on.
+    }
   }
 
   /**
@@ -149,6 +220,56 @@ class Session implements vscode.Disposable {
    * panel, which is exactly what it was before.
    */
   restoreLastReview(roots: string[]): void {
+    // Panel state first: it holds what was actually on screen, including
+    // findings carried over from earlier commits and which of them were ticked.
+    // last-review.json only ever describes the newest commit, so restoring from
+    // it silently drops everything carried forward.
+    let panel:
+      | { findings: Finding[]; root: string; sha: string; at: string; fixed: string[]; verified: string[] }
+      | undefined;
+
+    for (const root of roots) {
+      try {
+        const doc = JSON.parse(
+          readFileSync(join(root, ".cr-track", "panel.json"), "utf8"),
+        ) as {
+          commit?: string;
+          savedAt?: string;
+          fixed?: string[];
+          verified?: string[];
+          findings?: Finding[];
+        };
+        const findings = usableFindings(doc.findings);
+        if (!findings.length || !doc.commit) continue;
+        const at = doc.savedAt ?? "";
+        if (!panel || at > panel.at) {
+          panel = {
+            findings,
+            root,
+            sha: doc.commit,
+            at,
+            fixed: Array.isArray(doc.fixed) ? doc.fixed : [],
+            verified: Array.isArray(doc.verified) ? doc.verified : [],
+          };
+        }
+      } catch {
+        // No panel state, or unreadable — fall through to the report below.
+      }
+    }
+
+    if (panel) {
+      try {
+        this.display(panel.findings, panel.root, panel.sha, panel.verified, panel.fixed, false);
+        const left = this.tree.outstanding().length;
+        log.info(
+          `Restored ${panel.findings.length} finding(s) from the last session — ${left} still open`,
+        );
+        return;
+      } catch (err) {
+        log.warn(`Could not restore panel state: ${String(err)}`);
+      }
+    }
+
     let best: { findings: Finding[]; root: string; sha: string; at: string } | undefined;
 
     for (const root of roots) {
@@ -161,15 +282,7 @@ class Session implements vscode.Disposable {
         // A file can be valid JSON and still not be a report — half-written,
         // hand-edited, or from a future schema. Check the shape rather than
         // trusting the extension, and drop anything that fails.
-        const findings = (Array.isArray(doc.findings) ? doc.findings : []).filter(
-          (f): f is Finding =>
-            !!f &&
-            typeof f.id === "string" &&
-            typeof f.file === "string" &&
-            typeof f.title === "string" &&
-            Number.isFinite(f.lineStart) &&
-            Number.isFinite(f.lineEnd),
-        );
+        const findings = usableFindings(doc.findings);
         const sha = doc.review?.commit?.sha;
         if (!findings.length || !sha) continue;
         const at = doc.review?.completedAt ?? "";
@@ -183,7 +296,7 @@ class Session implements vscode.Disposable {
 
     if (!best) return;
     try {
-      this.display(best.findings, best.root, best.sha);
+      this.display(best.findings, best.root, best.sha, [], [], false);
     } catch (err) {
       // Restoring is a convenience. A report we cannot render must never stop
       // the extension starting — the developer would lose reviews entirely,
@@ -349,11 +462,16 @@ class Session implements vscode.Disposable {
       if (redactionHits.length) log.info(`Redacted: ${redactionHits.join(", ")}`);
 
       const endpoint = readEndpoint(repoRoot);
-      const token = process.env["CR_TRACK_INGEST_TOKEN"];
+      const token = await this.ingestToken?.();
       const result = await deliver(repoRoot, report, {
         ...(endpoint ? { endpoint } : {}),
         ...(token ? { token } : {}),
       });
+
+      if (result.permanentFailure) {
+        reportRejection(result, endpoint);
+        return;
+      }
 
       log.info(
         result.uploaded
@@ -373,6 +491,66 @@ class Session implements vscode.Disposable {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+
+/** Where the ingest token lives. */
+const TOKEN_KEY = "crTrack.ingestToken";
+
+/**
+ * The developer's ingest token.
+ *
+ * Kept in VS Code's SecretStorage, not settings: a settings entry is written to
+ * settings.json, which gets committed, shared and synced between machines, and
+ * these tokens identify one person. The environment variable is kept as a
+ * fallback so CI and headless runs still have a way in.
+ */
+async function readToken(context: vscode.ExtensionContext): Promise<string | undefined> {
+  const stored = await context.secrets.get(TOKEN_KEY);
+  if (stored?.trim()) return stored.trim();
+  const fromEnv = process.env["CR_TRACK_INGEST_TOKEN"]?.trim();
+  return fromEnv || undefined;
+}
+
+/**
+ * Tell the developer about a rejection retrying cannot fix.
+ *
+ * These are the two cases where silence is worst: the report is not queued, so
+ * nothing will ever pick it up again, and the cause is something only a person
+ * can put right. The log always gets the full detail; the notification is
+ * offered once, because a wrong token means every commit hits this.
+ */
+function reportRejection(
+  result: { permanentFailure?: "auth" | "payload"; status?: number; detail?: string; details?: string[] },
+  endpoint: string | undefined,
+): void {
+  if (result.permanentFailure === "auth") {
+    log.warn(
+      `The dashboard rejected the report: ${result.status} unauthorized. ` +
+        `The ingest token is missing, wrong or revoked (endpoint ${endpoint ?? "unset"}).`,
+    );
+    if (warnedAboutToken) return;
+    warnedAboutToken = true;
+    void vscode.window
+      .showWarningMessage(
+        "CR-Track: the dashboard rejected your ingest token. Reviews still run and are saved locally, but nothing is being recorded.",
+        "Set token",
+        "Show log",
+      )
+      .then((choice) => {
+        if (choice === "Set token") void vscode.commands.executeCommand("crTrack.setIngestToken");
+        else if (choice === "Show log") log.show();
+      });
+    return;
+  }
+
+  // A malformed payload is our bug, not the developer's. Put every reason the
+  // server gave in the log — that list is the whole diagnostic.
+  log.warn(`The dashboard rejected the report as invalid (${result.status}).`);
+  for (const d of result.details ?? []) log.warn(`  - ${d}`);
+  if (!result.details?.length && result.detail) log.warn(`  ${result.detail}`);
+}
+
+/** One notification per window, not one per commit. */
+let warnedAboutToken = false;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   context.subscriptions.push(initLog());
@@ -679,6 +857,7 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
   // Bring the last review back on screen. Without this the panel is empty
   // after every window reload until the next commit, so a half-finished list
   // of findings — and the progress through it — silently disappears.
+  session.ingestToken = () => readToken(context);
   session.restoreLastReview(repos.map((r) => r.root));
 
   disarmRecovery();
@@ -692,7 +871,7 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
   log.info(`Active on ${names} — every new commit will be reviewed`);
   for (const r of repos) log.info(`  ${r.name} (${r.branch}) — ${r.root}`);
 
-  const token = process.env["CR_TRACK_INGEST_TOKEN"];
+  const token = await readToken(context);
   for (const r of repos) {
     const endpoint = readEndpoint(r.root);
     if (!endpoint) continue;
@@ -856,6 +1035,35 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     const node = arg as { kind?: string; finding?: Finding } | undefined;
     return node?.kind === "finding" ? node.finding : undefined;
   };
+
+  register("crTrack.setIngestToken", async () => {
+    const existing = await context.secrets.get(TOKEN_KEY);
+    const entered = await vscode.window.showInputBox({
+      title: "CR-Track ingest token",
+      prompt: "Your personal token from the dashboard admin. Stored in VS Code's secret storage, never in settings.",
+      placeHolder: existing ? "A token is already stored — type a new one to replace it" : "Paste your token",
+      password: true,
+      ignoreFocusOut: true,
+    });
+    // Cancelled. Leave whatever was there alone; clearing a working token
+    // because someone pressed Escape would be its own bug.
+    if (entered === undefined) return;
+
+    const value = entered.trim();
+    if (!value) {
+      await context.secrets.delete(TOKEN_KEY);
+      log.info("Ingest token cleared.");
+      void vscode.window.showInformationMessage("CR-Track: ingest token cleared.");
+      return;
+    }
+
+    await context.secrets.store(TOKEN_KEY, value);
+    warnedAboutToken = false;
+    log.info("Ingest token stored.");
+    void vscode.window.showInformationMessage(
+      "CR-Track: ingest token saved. It will be used from your next commit.",
+    );
+  });
 
   register("crTrack.copyFinding", async (arg: unknown) => {
     const f = findingOf(arg);

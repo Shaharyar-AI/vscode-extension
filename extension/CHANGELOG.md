@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.7.0
+
+Two bugs in 0.6.0's green ticks, and the groundwork for reporting to a dashboard
+that authenticates.
+
+- **Ticking one finding could turn a different one green.** Every review numbers
+  its findings from `f1`, so findings carried over from the previous commit
+  arrived holding ids this commit's findings had already taken. Everything keys
+  on id — the fixed set, the squiggle removal, the saved progress — so the marks
+  landed on whatever happened to share the id. Ids are now made unique at the
+  one point the two sets meet, and a confirmed fix follows its own finding
+  through the renaming.
+- **Findings carried over from an earlier commit vanished on reload.** The panel
+  was restored from `last-review.json`, which describes one commit by design.
+  Panel state is now saved separately in `.cr-track/panel.json` — what was on
+  screen, and which rows were ticked. The report keeps describing only its own
+  commit, so nothing carried forward inflates the counts a review is judged on.
+
+Reporting to an authenticated dashboard:
+
+- **`CR-Track: Set ingest token`** stores a personal token in VS Code's secret
+  storage. Not a setting: `settings.json` is committed, shared and synced
+  between machines, and these tokens identify one person.
+  `CR_TRACK_INGEST_TOKEN` still works for CI.
+- **A rejected token or a malformed payload is no longer queued.** Both fail
+  identically however many times they are retried, so queueing them buried a
+  problem only a person could fix and filled the queue with work that could
+  never drain. A 401 now says the token is the problem and offers to fix it; a
+  422 logs every reason the server gave. A dashboard that is merely down still
+  queues, which is what the queue is for.
+- `repository.repo` is now qualified by its owner (`org/repo`), which a bare
+  name is not once two organisations both have a "backend".
+
 ## 0.6.0
 
 Fixing a problem now marks it fixed.

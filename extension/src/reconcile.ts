@@ -66,15 +66,31 @@ export function reconcile(
   const carried: Finding[] = [];
   const resolvedIds: string[] = [];
 
+  // Findings are numbered f1..fN afresh by every review, so a carried finding
+  // almost always arrives holding an id that one of this review's findings has
+  // taken. Everything downstream keys on id alone — the fixed set, the squiggle
+  // removal, the saved progress — so a collision means ticking one finding
+  // turns a different one green. Ids are made unique here, once, at the only
+  // point where the two sets meet.
+  const taken = new Set(fresh.map((f) => f.id));
+  let next = 0;
+
   for (const old of previous) {
     // Raised again, in its new position — the fresh copy replaces this one.
     if (fresh.some((f) => sameProblem(f, old))) continue;
 
-    carried.push(old);
+    let id = old.id;
+    while (taken.has(id)) {
+      next += 1;
+      id = `c${next}`;
+    }
+    taken.add(id);
+
+    carried.push(id === old.id ? old : { ...old, id });
     // Green only on evidence: the reviewer read the diff and said this one is
     // fixed. Absence from the new review is not evidence — it only reviewed a
     // diff, and most of the file was never in front of it.
-    if (confirmed.has(old.id)) resolvedIds.push(old.id);
+    if (confirmed.has(old.id)) resolvedIds.push(id);
   }
 
   return { findings: [...fresh, ...carried], resolvedIds };

@@ -75,7 +75,31 @@ function commit(dir, message, files) {
   return git(dir, "rev-parse", "HEAD").trim();
 }
 
+const NEWLINE = String.fromCharCode(10);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Wait for something to become true, rather than assuming a fixed delay was
+ * enough.
+ *
+ * The extension logs its review outcome *before* awaiting delivery, so settle()
+ * returns while the upload is still in flight. Any check that inspects what
+ * delivery produced — a queued file, a POST received — is racing it, and a race
+ * that usually wins is worse than one that always loses: it fails once in
+ * twenty runs and gets dismissed as a blip.
+ */
+async function waitFor(predicate, seconds = 20) {
+  const deadline = Date.now() + seconds * 1000;
+  while (Date.now() < deadline) {
+    try {
+      if (await predicate()) return true;
+    } catch {
+      /* not ready yet */
+    }
+    await sleep(250);
+  }
+  return false;
+}
 
 /** Invoke a registered command the way the palette or a row action would. */
 const run = (state, id, ...args) => state.commands.get(id)?.(...args);
@@ -658,7 +682,43 @@ export async function transfer(from: string, to: string, amount: any) {
     check("...and fixed findings do not come back as squiggles",
       [...second.state.diagnostics.values()].flat().length === before.length - 2,
       `${[...second.state.diagnostics.values()].flat().length} squiggles`);
+
+    const panelPath = path.join(repo, ".cr-track", "panel.json");
+    check("The panel saves its own state, separate from the dashboard report",
+      fs.existsSync(panelPath), ".cr-track/panel.json");
+
+    // A finding carried over from an earlier commit lives only in panel state:
+    // last-review.json describes one commit, by design. Restoring from the
+    // report alone silently dropped everything carried forward.
+    const panel = JSON.parse(fs.readFileSync(panelPath, "utf8"));
+    const reportOnly = JSON.parse(
+      fs.readFileSync(path.join(repo, ".cr-track", "last-review.json"), "utf8"),
+    );
+    panel.findings.push({
+      id: "c1", file: "src/older.ts", lineStart: 4, lineEnd: 6,
+      severity: "important", category: "correctness",
+      title: "Carried over from an earlier commit",
+      description: "d", suggestion: "s",
+    });
+    fs.writeFileSync(panelPath, JSON.stringify(panel), "utf8");
+    check("...and the report still describes only its own commit",
+      !JSON.stringify(reportOnly.findings).includes("Carried over from an earlier commit"),
+      `${reportOnly.findings.length} finding(s) reported`,
+      "carried findings leaked into the dashboard report and would inflate its counts");
     second.restore();
+
+    const third = await boot(repo, { store: savedState });
+    const carried = (await walkTree(third.state)).filter((r) => r.kind === "finding");
+    check("A finding carried from an earlier commit survives a reload",
+      carried.some((r) => r.node.finding.title === "Carried over from an earlier commit"),
+      `${carried.length} row(s)`,
+      "reloading dropped every finding carried over from a previous commit");
+    check("...alongside this commit's own findings",
+      carried.length === panel.findings.length, `${carried.length} of ${panel.findings.length}`);
+    check("...with the ticked ones still green",
+      carried.filter((r) => r.contextValue === "finding-fixed").length === 2,
+      `${carried.filter((r) => r.contextValue === "finding-fixed").length} green`);
+    third.restore();
   }
 
   section("6e. A fix confirmed by the reviewer turns the row green");
@@ -719,6 +779,32 @@ export async function transfer(from: string, to: string, amount: any) {
       `${shifted.findings.filter((f) => f.file === "src/a.ts").length} in src/a.ts`,
       "an edit that shifted line numbers duplicated the finding");
 
+    // The collision that made ticking one finding green a different one:
+    // every review re-numbers its findings from f1, so carried and fresh
+    // findings arrive holding the same ids.
+    const freshSameIds = [
+      prior("f1", "src/new.ts", "Missing await on the write"),
+      prior("f2", "src/new.ts", "Error is swallowed by the catch"),
+    ];
+    const merged = reconcile(previous, freshSameIds, []);
+    const ids = merged.findings.map((f) => f.id);
+    check("Merged findings all have distinct ids",
+      new Set(ids).size === ids.length, ids.join(","),
+      "two findings share an id — ticking one marks the other fixed");
+    check("...with the fresh ones keeping the ids the report used",
+      merged.findings.filter((f) => f.file === "src/new.ts").map((f) => f.id).join(",") === "f1,f2",
+      "f1,f2");
+    check("...and nothing lost in the renaming",
+      merged.findings.length === 5, `${merged.findings.length} of 5`);
+
+    // A confirmed fix must follow its finding through the renaming.
+    const renamed = reconcile(previous, freshSameIds, ["f2"]);
+    const green = renamed.findings.find((f) => renamed.resolvedIds.includes(f.id));
+    check("A confirmed fix marks the finding it was about, not one that took its id",
+      green?.title === "Progress pruning evicts the newest entry",
+      green?.title || "(none)",
+      "the wrong finding turned green after ids were made unique");
+
     // Same words, different file, is a different problem.
     const elsewhere = reconcile(
       previous,
@@ -727,6 +813,135 @@ export async function transfer(from: string, to: string, amount: any) {
     );
     check("The same wording in another file is a separate problem",
       elsewhere.findings.length === 4, `${elsewhere.findings.length}`);
+  }
+
+  section("6f. The ingest token and how rejections are handled");
+  if (FAST) {
+    skipped("Token and rejection handling", "needs a live review to post");
+  } else {
+    const http = require("node:http");
+
+    // A stand-in for the production dashboard: bearer auth first, then schema.
+    const seen = [];
+    let mode = "ok";
+    const server = http.createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        const auth = req.headers["authorization"] || "";
+        seen.push({ auth, body });
+        const send = (code, obj) => {
+          res.writeHead(code, { "content-type": "application/json" });
+          res.end(JSON.stringify(obj));
+        };
+        if (mode === "unauthorized" || !/^Bearer .+/.test(auth)) {
+          return send(401, { error: "unauthorized — unknown or revoked token" });
+        }
+        if (mode === "invalid") {
+          return send(422, {
+            error: "invalid payload",
+            details: ["schemaVersion must be 2.x", "review.id is required"],
+          });
+        }
+        let parsed = {};
+        try { parsed = JSON.parse(body); } catch { /* reported below */ }
+        send(200, { ok: true, reviewId: parsed?.review?.id });
+      });
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const endpoint = `http://127.0.0.1:${server.address().port}/api/ingest`;
+
+    const repo = makeRepo("ingest");
+    git(repo, "remote", "add", "origin", "https://github.com/ikonic-git-admin/some-repo.git");
+    fs.writeFileSync(path.join(repo, ".cr-track.yaml"), `endpoint: ${endpoint}
+`);
+    git(repo, "add", "-A");
+    git(repo, "commit", "-qm", "point at the test server");
+
+    // Answers are scripted up front, the way every other dialog test here does
+    // it. The padding is deliberate: a pasted token usually carries whitespace.
+    const { state, context, restore } = await boot(repo, {
+      answers: { input: ["  tok_abc123  "] },
+    });
+
+    // ---- storing a token --------------------------------------------------
+    await run(state, "crTrack.setIngestToken");
+    check("Setting a token stores it in secret storage",
+      context.store.get("secret:crTrack.ingestToken") === "tok_abc123",
+      JSON.stringify(context.store.get("secret:crTrack.ingestToken")),
+      "the token was not stored, or was stored with surrounding whitespace");
+    check("...and it is asked for as a password, not plain text",
+      state.inputOptions[state.inputOptions.length - 1]?.password === true,
+      `password: ${state.inputOptions[state.inputOptions.length - 1]?.password}`,
+      "the token is echoed on screen while being typed");
+    check("...and never lands in settings, which get committed",
+      !JSON.stringify([...context.store.keys()]).includes("configuration"),
+      "secret storage only");
+
+    // ---- it is actually sent ---------------------------------------------
+    seen.length = 0;
+    commit(repo, "add transfer", { "src/payments.ts": BAD_SOURCE });
+    await fireCommitWatcher(state);
+    const posted = seen[seen.length - 1];
+    check("The token is sent as a bearer header",
+      posted?.auth === "Bearer tok_abc123",
+      posted ? JSON.stringify(posted.auth) : "(no request reached the server)");
+    check("...alongside a schema 2.x payload",
+      /^2\./.test(JSON.parse(posted.body).schemaVersion), JSON.parse(posted.body).schemaVersion);
+    check("...carrying repository.repo qualified by its owner",
+      String(JSON.parse(posted.body).repository?.repo || "").includes("/"),
+      JSON.parse(posted.body).repository?.repo || "(absent)",
+      "repository.repo is a bare name, which collides across organisations");
+
+    restore();
+
+    // ---- how the two unretryable rejections are handled -------------------
+    //
+    // Driven through the transport directly rather than a full commit review:
+    // these are properties of delivery, and three more live reviews would add
+    // minutes to the suite to prove nothing extra.
+    const { deliver } = require(path.join(EXT_DIR, "..", "engine", "dist", "telemetry.js"));
+    const report = JSON.parse(
+      fs.readFileSync(path.join(repo, ".cr-track", "last-review.json"), "utf8"),
+    );
+    const queueDir = path.join(repo, ".cr-track", "queue");
+    const queued = () => (fs.existsSync(queueDir) ? fs.readdirSync(queueDir).length : 0);
+
+    mode = "unauthorized";
+    const beforeAuth = queued();
+    const authResult = await deliver(repo, report, { endpoint, token: "revoked" });
+    check("A rejected token is reported as an auth problem",
+      authResult.permanentFailure === "auth", String(authResult.permanentFailure));
+    check("...and is not queued for retry",
+      authResult.queued === false && queued() === beforeAuth,
+      `queue ${beforeAuth} -> ${queued()}`,
+      "reports pile up in a queue that can never drain");
+
+    mode = "invalid";
+    const beforeInvalid = queued();
+    const badResult = await deliver(repo, report, { endpoint, token: "tok_abc123" });
+    check("A malformed payload is reported as a payload problem",
+      badResult.permanentFailure === "payload", String(badResult.permanentFailure));
+    check("...and is not queued either",
+      badResult.queued === false && queued() === beforeInvalid,
+      `queue ${beforeInvalid} -> ${queued()}`);
+    check("...and every reason the server gave is kept",
+      (badResult.details || []).join(" | ").includes("schemaVersion must be 2.x") &&
+        (badResult.details || []).join(" | ").includes("review.id is required"),
+      (badResult.details || []).join(" | ") || "(none)",
+      "the server said exactly what was wrong and we discarded it");
+
+    // A real outage must still queue — that is what the queue is for.
+    mode = "ok";
+    server.close();
+    await sleep(200);
+    const beforeDown = queued();
+    const downResult = await deliver(repo, report, { endpoint, token: "tok_abc123" });
+    check("A dashboard that is merely down still queues for retry",
+      downResult.queued === true && queued() === beforeDown + 1,
+      `queue ${beforeDown} -> ${queued()}`,
+      "a transient outage now loses reports");
+
   }
 
   // ── 7. The report ──────────────────────────────────────────────────────
@@ -764,6 +979,7 @@ export async function transfer(from: string, to: string, amount: any) {
       const postDeadline = Date.now() + 20_000;
       while (!received.length && Date.now() < postDeadline) await sleep(500);
 
+      await waitFor(() => received.length > 0);
       check("A report was POSTed", received.length > 0,
         `${received.length} request(s)`, "the dashboard was never called");
 
@@ -822,9 +1038,11 @@ export async function transfer(from: string, to: string, amount: any) {
       /unreachable|queued/i.test(logText(state)), "queued for retry",
       `log said nothing about the failed upload: ${logText(state).slice(-300)}`);
     const queueDir = path.join(repo, ".cr-track", "queue");
-    check("...and the report is queued for retry",
-      fs.existsSync(queueDir) && fs.readdirSync(queueDir).length > 0,
-      fs.existsSync(queueDir) ? `${fs.readdirSync(queueDir).length} queued` : "no queue dir");
+    const didQueue = await waitFor(
+      () => fs.existsSync(queueDir) && fs.readdirSync(queueDir).length > 0,
+    );
+    check("...and the report is queued for retry", didQueue,
+      didQueue ? `${fs.readdirSync(queueDir).length} queued` : "no queue dir after 20s");
     check("...and nothing was shown to the developer as an error",
       !state.messages.some((m) => m.kind === "error"), "silent");
     restore();

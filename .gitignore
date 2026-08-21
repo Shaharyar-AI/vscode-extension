@@ -23,3 +23,7 @@ Thumbs.db
 
 # playwright scratch
 .playwright-mcp/
+
+# Panel state is one developer's working notes — which findings they have
+# ticked off. last-review.json is shared deliberately; this is not.
+.cr-track/panel.json
