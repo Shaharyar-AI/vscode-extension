@@ -76,6 +76,9 @@ function commit(dir, message, files) {
 }
 
 const NEWLINE = String.fromCharCode(10);
+
+/** Claude processes already running when the suite started; not ours to blame. */
+let preexisting = new Set();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /**
@@ -99,6 +102,29 @@ async function waitFor(predicate, seconds = 20) {
     await sleep(250);
   }
   return false;
+}
+
+/**
+ * PIDs of engine-spawned Claude processes alive right now.
+ *
+ * Used to take a baseline before the suite starts, so the orphan check at the
+ * end counts only what this run left behind. Without it a second suite or a
+ * live test running alongside looks like a leak.
+ */
+function engineClaudePids() {
+  try {
+    const script =
+      "Get-CimInstance Win32_Process | " +
+      "Where-Object { $_.Name -like 'claude*' -and " +
+      "$_.CommandLine -like '*no-session-persistence*' } | " +
+      "Select-Object -ExpandProperty ProcessId";
+    return execFileSync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf8" })
+      .split(/\r?\n/)
+      .map((line) => parseInt(line.trim(), 10))
+      .filter((pid) => Number.isFinite(pid));
+  } catch {
+    return [];
+  }
 }
 
 /** Invoke a registered command the way the palette or a row action would. */
@@ -213,6 +239,7 @@ export async function transfer(from: string, to: string, amount: any) {
 
 // ═════════════════════════════════════════════════════════════════════════
 (async () => {
+  preexisting = new Set(engineClaudePids());
   console.log(c("1", "\nCR-Track QA") + dim(`   bundle ${fs.existsSync(BUNDLE) ? "ok" : "MISSING"}   ${FAST ? "fast mode" : "full"}`));
 
   if (!fs.existsSync(BUNDLE)) {
@@ -987,9 +1014,6 @@ export async function transfer(from: string, to: string, amount: any) {
       // The status bar flips to "reviewed" before the report is uploaded — the
       // developer should never wait on telemetry — so settling is not the same
       // as having delivered.
-      const postDeadline = Date.now() + 20_000;
-      while (!received.length && Date.now() < postDeadline) await sleep(500);
-
       await waitFor(() => received.length > 0);
       check("A report was POSTed", received.length > 0,
         `${received.length} request(s)`, "the dashboard was never called");
@@ -1023,6 +1047,7 @@ export async function transfer(from: string, to: string, amount: any) {
         }
       }
 
+      await waitFor(() => fs.existsSync(path.join(repo, ".cr-track", "last-review.json")));
       check("A local copy is always written",
         fs.existsSync(path.join(repo, ".cr-track", "last-review.json")),
         ".cr-track/last-review.json");
@@ -1045,8 +1070,11 @@ export async function transfer(from: string, to: string, amount: any) {
     commit(repo, "change", { "src/x.ts": BAD_SOURCE });
     const settled = await fireCommitWatcher(state);
     check("The review still completes with the dashboard down", settled, state.statusText);
-    check("...and the failure is explained, not swallowed",
-      /unreachable|queued/i.test(logText(state)), "queued for retry",
+    // Delivery is awaited after the outcome line, so the upload's own log line
+    // lands a moment later. Reading it immediately is a race — the same race
+    // that has now bitten five separate checks in this file.
+    const explained = await waitFor(() => /unreachable|queued/i.test(logText(state)));
+    check("...and the failure is explained, not swallowed", explained, "queued for retry",
       `log said nothing about the failed upload: ${logText(state).slice(-300)}`);
     const queueDir = path.join(repo, ".cr-track", "queue");
     const didQueue = await waitFor(
@@ -1090,12 +1118,33 @@ export async function transfer(from: string, to: string, amount: any) {
       try {
         // Filter by name first: without it the query matches the very
         // PowerShell process running it, whose command line contains the flag.
+        // Match on --no-session-persistence, which every process the engine
+        // spawns carries. The old filter looked for --append-system-prompt-file,
+        // which only the review pass uses — the fix-verification pass was
+        // invisible to this check, so a leak there would never have been seen.
         const script =
-          "@(Get-CimInstance Win32_Process | " +
+          "Get-CimInstance Win32_Process | " +
           "Where-Object { $_.Name -like 'claude*' -and " +
-          "$_.CommandLine -like '*append-system-prompt-file*' }).Count";
-        const out = execFileSync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf8" });
-        orphans = parseInt(out.trim(), 10) || 0;
+          "$_.CommandLine -like '*no-session-persistence*' } | " +
+          "Select-Object -ExpandProperty ProcessId";
+        const count = () =>
+          execFileSync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf8" })
+            .split(/\r?\n/)
+            .map((line) => parseInt(line.trim(), 10))
+            .filter((pid) => Number.isFinite(pid));
+        // A killed process lingers in Win32_Process for a moment, so sampling
+        // once turns teardown timing into an intermittent failure. Wait for it
+        // to settle; only a process still alive after that is really orphaned.
+        // Count only processes this run started. Another suite or a live test
+        // running concurrently has its own reviews in flight, and counting
+        // those reported an orphan that was simply someone else's live work —
+        // an alarm about a bug that was not there.
+        const mine = () => count().filter((pid) => !preexisting.has(pid));
+        orphans = mine().length;
+        for (let i = 0; orphans > 0 && i < 40; i += 1) {
+          await sleep(250);
+          orphans = mine().length;
+        }
       } catch { orphans = 0; }
       check("No review processes left running after the suite",
         orphans === 0, "none",
