@@ -3,22 +3,22 @@
   "source": "claude-code-skill",
   "ruleset": "coderabbit-style@2.0",
   "review": {
-    "id": "c0c45d59-610d-401c-b30e-236a925c2012",
-    "triggeredAt": "2026-08-24T12:02:16.800Z",
-    "completedAt": "2026-08-24T12:05:22.951Z",
-    "durationMs": 147975,
+    "id": "f91fd610-34c5-4867-a784-9339367db04c",
+    "triggeredAt": "2026-08-24T12:20:32.596Z",
+    "completedAt": "2026-08-24T12:22:02.504Z",
+    "durationMs": 68617,
     "status": "completed",
     "mode": "committed",
     "model": "claude-opus-5",
     "effort": "medium",
     "secondPass": false,
     "commit": {
-      "sha": "a57092909f511f8a11657dc31dc0a1cef4c341b9",
-      "shortSha": "a570929",
-      "message": "Report defects, and tell the dashboard what was done about them (0.9.0)",
+      "sha": "b1a728b6d60e36947cc591da863e84045f0c06c7",
+      "shortSha": "b1a728b",
+      "message": "Keep whole-file review working under the defect-only prompt (0.9.1)",
       "authorName": "Shaharyar-AI",
       "authorEmail": "shaharyar_shabbir@ikonicsolution.com",
-      "authoredAt": "2026-08-24T17:02:14+05:00"
+      "authoredAt": "2026-08-24T17:20:30+05:00"
     }
   },
   "developer": {
@@ -31,40 +31,26 @@
     "remote": "https://github.com/ikonic-git-admin/claude-skills.git",
     "branch": "main",
     "baseBranch": "main",
-    "commitBefore": "a570929",
+    "commitBefore": "b1a728b",
     "isDirty": false,
     "host": "github.com",
     "owner": "ikonic-git-admin",
     "repo": "ikonic-git-admin/claude-skills"
   },
   "project": {
-    "primaryLanguage": "TypeScript"
+    "primaryLanguage": "JSON"
   },
   "diffStats": {
-    "filesChanged": 17,
-    "linesAdded": 1136,
-    "linesRemoved": 247,
+    "filesChanged": 8,
+    "linesAdded": 208,
+    "linesRemoved": 97,
     "files": [
       {
         "path": ".cr-track/last-review.json",
         "language": "JSON",
-        "linesAdded": 76,
-        "linesRemoved": 96,
+        "linesAdded": 171,
+        "linesRemoved": 89,
         "changeType": "modified"
-      },
-      {
-        "path": "CODE REVIEW PROMPT",
-        "language": null,
-        "linesAdded": 180,
-        "linesRemoved": 0,
-        "changeType": "added"
-      },
-      {
-        "path": "CR-Track Extension Changes (Dev Hand-off).md",
-        "language": "Markdown",
-        "linesAdded": 155,
-        "linesRemoved": 0,
-        "changeType": "added"
       },
       {
         "path": "dashboard/public/version.txt",
@@ -83,85 +69,36 @@
       {
         "path": "docs/PROMPT.md",
         "language": "Markdown",
-        "linesAdded": 109,
-        "linesRemoved": 87,
-        "changeType": "modified"
-      },
-      {
-        "path": "engine/scripts/generate-prompt-doc.cjs",
-        "language": "JavaScript",
-        "linesAdded": 2,
+        "linesAdded": 1,
         "linesRemoved": 1,
         "changeType": "modified"
       },
       {
         "path": "engine/src/prompt.ts",
         "language": "TypeScript",
-        "linesAdded": 126,
-        "linesRemoved": 40,
-        "changeType": "modified"
-      },
-      {
-        "path": "engine/src/report.ts",
-        "language": "TypeScript",
-        "linesAdded": 20,
-        "linesRemoved": 3,
-        "changeType": "modified"
-      },
-      {
-        "path": "engine/src/review.ts",
-        "language": "TypeScript",
-        "linesAdded": 5,
+        "linesAdded": 11,
         "linesRemoved": 4,
-        "changeType": "modified"
-      },
-      {
-        "path": "engine/src/telemetry.ts",
-        "language": "TypeScript",
-        "linesAdded": 24,
-        "linesRemoved": 0,
-        "changeType": "modified"
-      },
-      {
-        "path": "engine/src/types.ts",
-        "language": "TypeScript",
-        "linesAdded": 14,
-        "linesRemoved": 1,
         "changeType": "modified"
       },
       {
         "path": "extension/CHANGELOG.md",
         "language": "Markdown",
-        "linesAdded": 61,
+        "linesAdded": 10,
         "linesRemoved": 0,
         "changeType": "modified"
       },
       {
         "path": "extension/package.json",
         "language": "JSON",
-        "linesAdded": 15,
-        "linesRemoved": 2,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/src/config.ts",
-        "language": "TypeScript",
         "linesAdded": 1,
-        "linesRemoved": 0,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/src/extension.ts",
-        "language": "TypeScript",
-        "linesAdded": 157,
-        "linesRemoved": 5,
+        "linesRemoved": 1,
         "changeType": "modified"
       },
       {
         "path": "extension/test/qa.js",
         "language": "JavaScript",
-        "linesAdded": 189,
-        "linesRemoved": 6,
+        "linesAdded": 12,
+        "linesRemoved": 0,
         "changeType": "modified"
       }
     ]
@@ -169,67 +106,16 @@
   "findings": [
     {
       "id": "f1",
-      "file": "engine/src/telemetry.ts",
-      "lineStart": 178,
-      "lineEnd": 181,
+      "file": "engine/src/prompt.ts",
+      "lineStart": 275,
+      "lineEnd": 278,
       "severity": "important",
       "category": "correctness",
-      "title": "Any status other than 401/403 is reported as a working token",
-      "description": "`checkToken` returns \"ok\" for every defined status that isn't 401/403, so a 404 from a mistyped endpoint path, a 502 from a proxy, or a 500 all surface as \"token accepted. Your next commit will be recorded.\" The doc comment's reasoning only holds for a status the server produced *after* auth ran (422/400, or a 2xx) — a 404 never reached the handler at all. The stated purpose is to tell the developer now rather than at the next commit, and these are the cases where they'd most want to know.",
-      "suggestion": "Consider narrowing \"ok\" to the statuses that prove the request got past auth into validation, and treating the rest as \"unreachable\". The QA block only exercises the 200/401 paths, so a case for 404 would be worth adding alongside.",
-      "confidence": 0.85,
+      "title": "Override quotes a phrase the system prompt never uses",
+      "description": "The override tells the model \"where it says 'what this change introduced'\", but the system prompt's actual wording is \"Anything this diff did not introduce\" (prompt.ts:94) and \"keep only what the changed lines introduce\" (prompt.ts:165). Since no rule matches the quoted string, the model has to guess which rule is being carved out — the exact ambiguity this change exists to remove. The Scope discipline section (\"you have drifted into reviewing the file instead of the change\") is also left untouched, and it pushes in the same suppressing direction.",
+      "suggestion": "Consider anchoring the exception to the wording that is actually in the system prompt, and naming the scope-discipline rule too, so both suppressing rules are covered.",
+      "confidence": 0.62,
       "hadPatch": true,
-      "status": "proposed",
-      "accepted": false,
-      "dismissReason": null,
-      "detectedBy": "llm"
-    },
-    {
-      "id": "f2",
-      "file": "extension/src/extension.ts",
-      "lineStart": 468,
-      "lineEnd": 476,
-      "severity": "important",
-      "category": "correctness",
-      "title": "The debounce timer outlives the session",
-      "description": "`repushTimer` is cleared in `scheduleRepush` and `finalizePrevious`, but `dispose()` (line 618) only walks `this.disposables`. A tick within 3s of a window reload or `deactivate()` leaves a pending timer that fires against a torn-down session, pushing a report for a review the user has already left — and in the QA harness, after `restore()` and `server.close()`.",
-      "suggestion": "Clearing `repushTimer` in `dispose()` alongside the disposables would bound it; if the outcome is worth keeping, `finalizePrevious()` there instead would both flush and clear it.",
-      "confidence": 0.78,
-      "hadPatch": false,
-      "status": "proposed",
-      "accepted": false,
-      "dismissReason": null,
-      "detectedBy": "llm"
-    },
-    {
-      "id": "f3",
-      "file": "engine/src/review.ts",
-      "lineStart": 316,
-      "lineEnd": 317,
-      "severity": "nit",
-      "category": "maintainability",
-      "title": "`profile` no longer affects confidence, but the ruleset still says it does",
-      "description": "The per-profile thresholds are gone, so `assertive` and `chill` now share the same 0.8 floor. `resources/references/ruleset.md` (loaded into the reviewer's own prompt) still states assertive \"report[s] everything, including speculative nit/suggestion\" — which the floor now prevents regardless of profile.",
-      "suggestion": "Either reconciling the profile-strictness section with the flat floor, or letting `assertive` lower `minConfidence`, would keep the documented profiles honest. The QA block asserts the floor but nothing asserts what a profile still changes.",
-      "confidence": 0.6,
-      "hadPatch": false,
-      "status": "proposed",
-      "accepted": false,
-      "dismissReason": null,
-      "detectedBy": "llm"
-    },
-    {
-      "id": "f4",
-      "file": "extension/test/qa.js",
-      "lineStart": 1316,
-      "lineEnd": 1318,
-      "severity": "nit",
-      "category": "testing",
-      "title": "The annotation-plumbing check passes on a prompt that disables annotations",
-      "description": "`/annotations/i.test(systemPrompt)` is now satisfied by the new preamble's only mention of the word — \"Emit no `learning` or `praise` annotations\" — so the check labelled \"the plumbing is still there if they are switched back on\" would stay green even if every annotation code path were deleted. It records that the prompt contains a string, not that the feature could be re-enabled.",
-      "suggestion": "Asserting against the thing that would actually break — the schema's `annotations` array and the extension not hardcoding `annotations: []`, both of which the neighbouring checks already cover — might make this one redundant rather than misleading.",
-      "confidence": 0.75,
-      "hadPatch": false,
       "status": "proposed",
       "accepted": false,
       "dismissReason": null,
@@ -239,32 +125,30 @@
   "annotations": [
     {
       "id": "a1",
-      "file": "engine/src/report.ts",
-      "lineStart": 70,
-      "lineEnd": 79,
+      "file": "engine/src/prompt.ts",
+      "lineStart": 272,
+      "lineEnd": 274,
       "severity": "praise",
-      "category": "maintainability",
-      "title": "The `finalized` flag records why, not just what",
-      "description": "The comment explains the failure mode the field exists to prevent — applied ÷ total measured at push time always reads 0% — which is exactly the kind of thing the next reader could not recover from the code. The matching note in `finalizePrevious` about an untouched review staying unscored forever closes the loop on the other direction."
+      "category": "docs",
+      "title": "The comment records the failure mode, not the code",
+      "description": "\"without this sentence that rule suppresses every finding and the review comes back empty\" is exactly the kind of comment that survives — it explains why the sentence cannot be deleted, which is not recoverable from reading the string. The matching rationale on the QA check means the next person hits the same explanation from either direction."
     }
   ],
   "changes": [],
   "summary": {
-    "findingsTotal": 4,
+    "findingsTotal": 1,
     "bySeverity": {
       "blocking": 0,
-      "important": 2,
-      "nit": 2,
+      "important": 1,
+      "nit": 0,
       "suggestion": 0
     },
     "byCategory": {
-      "correctness": 2,
-      "maintainability": 1,
-      "testing": 1
+      "correctness": 1
     },
     "applied": 0,
     "dismissed": 0,
-    "outstanding": 4,
+    "outstanding": 1,
     "patchesOffered": 1,
     "reviewerTimeSavedMin": 0,
     "annotations": {
