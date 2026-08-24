@@ -116,11 +116,23 @@ export interface EngineConfig {
   maxBudgetUsd: number;
   timeoutMs: number;
   guidesEnabled: boolean;
+  /**
+   * Findings below this confidence are discarded by the caller.
+   *
+   * The prompt already tells the reviewer not to report them, but a model that
+   * drifts would otherwise raise the noise floor on its own — and this number
+   * feeds a measure of the author's work, so it is enforced on both sides.
+   */
+  minConfidence: number;
 }
 
 export const DEFAULT_CONFIG: EngineConfig = {
   profile: "balanced",
-  categoriesEnabled: [...CATEGORIES],
+  // Defects only. maintainability, testing, style and docs were removed as
+  // finding categories: they produced opinions, and an opinion rated
+  // "important" reaches the author's performance measure exactly as a real
+  // defect does.
+  categoriesEnabled: ["security", "correctness", "performance"],
   minSeverity: "nit",
   model: "claude-opus-5",
   effort: "medium",
@@ -128,6 +140,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   // ever truncates a review mid-flight and throws the work away.
   maxBudgetUsd: 0,
   timeoutMs: 180_000,
+  minConfidence: 0.8,
   guidesEnabled: true,
 };
 

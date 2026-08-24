@@ -1,5 +1,66 @@
 # Changelog
 
+## 0.9.0
+
+Setting your token is a button now, and it tells you straight away whether it
+works.
+
+- **A key icon in the Findings panel title bar**, beside review and copy-all.
+  Setting a token is the one thing every developer must do by hand, and until
+  they do it every report is refused — leaving it in the command palette cost a
+  support conversation per person.
+- **The token is checked as you enter it.** Accepted, rejected, or "could not
+  reach the dashboard", said immediately rather than discovered at the next
+  commit when the dashboard turns out to be empty.
+- The check writes nothing. It sends a payload the server must reject, because
+  authentication is tested before the schema: a 422 proves the credentials were
+  accepted while storing nothing. Sending a valid probe would have answered the
+  same question by filing a junk review for every developer who ever set a
+  token.
+
+## 0.9.0
+
+Defects only, and the dashboard now learns what you did about them.
+
+**Reviews report defects, not opinions.**
+
+- Findings are limited to **security, correctness and performance**.
+  Maintainability, testing, style and docs are no longer findings at all. A
+  six-line diff was returning nine findings — none of them defects, two rated at
+  the severity that feeds the author's performance measure. An opinion that
+  costs someone a KPI point is worse than no finding.
+- An explicit **"what is NOT a finding"** list, and **pre-existing problems in
+  surrounding code are out of scope** — that drift is what turned small diffs
+  into long reviews.
+- Every finding must name **what breaks, the trigger, the file and line, and one
+  concrete fix**. No "consider reviewing this logic".
+- The **high-level architecture pass is gone**, and the architecture guide is no
+  longer assembled: both existed to produce design commentary.
+- **A 0.8 confidence floor, enforced in the extension** rather than only asked
+  for in the prompt, at every severity including blocking. Configurable via
+  `crTrack.minConfidence`.
+
+**The outcome is pushed back, so the KPI can be computed.**
+
+- Reports are `schemaVersion` **2.1** and carry **`finalized`**. A report sent
+  when the review completes always reads 0% applied, because nobody has fixed
+  anything yet — consumers hold it out of scoring until it is finalized.
+- Ticking a finding **updates that review in place**, under the same
+  `review.id`, with stable finding ids so the history of what was raised and
+  then fixed survives. Debounced, so working through a list is one upload.
+- `finalized` is set when **every finding has been dealt with**, and when **the
+  next commit closes the review out** — whatever the developer did or did not do
+  about it. Without that second trigger, a review nobody touched would stay
+  unscored for ever.
+
+**Setting your token is a button.**
+
+- A key icon in the Findings panel title bar, beside review and copy-all.
+- The token is **checked as you type it** — accepted, rejected, or dashboard
+  unreachable — instead of failing silently at your next commit. The check
+  stores nothing: it sends a payload the server must reject, so a 422 proves the
+  credentials passed while filing no review.
+
 ## 0.8.0
 
 The reviewer can say something good, and is told to quote less.

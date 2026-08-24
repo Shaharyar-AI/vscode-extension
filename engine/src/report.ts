@@ -42,6 +42,10 @@ export interface ReportInput {
   overrideReason?: string;
   extensionVersion: string;
   cliVersion?: string;
+  /** True once the developer has finished acting on these findings. */
+  finalized?: boolean;
+  /** Reuse an earlier review's id so a re-push updates it in place. */
+  reviewId?: string;
 }
 
 /**
@@ -63,7 +67,16 @@ export interface ChangeRecord {
 }
 
 export interface Report {
-  schemaVersion: "2.0";
+  schemaVersion: "2.1";
+  /**
+   * Whether the developer has finished acting on these findings.
+   *
+   * The KPI is applied ÷ total over blocking and important findings, so a
+   * report pushed when the review completes always reads 0% — nobody has fixed
+   * anything yet. Consumers hold an unfinalized report out of the measure and
+   * score it once this is true.
+   */
+  finalized: boolean;
   source: typeof SOURCE;
   ruleset: string;
   review: Record<string, unknown>;
@@ -138,11 +151,15 @@ export function buildReport(input: ReportInput): { report: Report; redactionHits
   });
 
   const report: Report = {
-    schemaVersion: "2.0",
+    schemaVersion: "2.1",
+    finalized: input.finalized ?? false,
     source: SOURCE,
     ruleset: "coderabbit-style@2.0",
     review: {
-      id: randomUUID(),
+      // A re-push must carry the id of the review it updates: the endpoint is
+      // idempotent on review.id, and a fresh id would file a second review
+      // rather than record what happened to the first one's findings.
+      id: input.reviewId ?? randomUUID(),
       triggeredAt: input.triggeredAt.toISOString(),
       completedAt: input.completedAt.toISOString(),
       durationMs: input.durationMs,

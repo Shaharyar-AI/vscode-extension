@@ -44,8 +44,9 @@ import { findReferencesDir } from "@engine/prompt";
 import { killAllChildren } from "@engine/proc";
 import { buildReport } from "@engine/report";
 import { runReview } from "@engine/review";
-import { deliver, flushQueue } from "@engine/telemetry";
+import { checkToken, deliver, flushQueue } from "@engine/telemetry";
 import type { Annotation, DiffStats, Finding, RepoContext } from "@engine/types";
+import type { ReportInput } from "@engine/report";
 
 let session: Session | undefined;
 
@@ -81,6 +82,21 @@ class Session implements vscode.Disposable {
   /** Where panel state is saved, and which of the rows were reviewer-confirmed. */
   private panelRoot = "";
   private verifiedIds: string[] = [];
+
+  /**
+   * The review most recently pushed, kept so ticking a finding can update it.
+   *
+   * The dashboard scores applied ÷ total over blocking and important findings.
+   * A report pushed when the review finishes always reads 0%, because nobody
+   * has fixed anything yet — the outcome only exists once the developer has
+   * worked through the list, which is minutes or hours later.
+   */
+  private pushed:
+    | { reviewId: string; root: string; findingIds: string[]; input: ReportInput }
+    | undefined;
+
+  /** Collapses a burst of ticks into one push. */
+  private repushTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Supplied by activate(); Session should not know where secrets live. */
   ingestToken: (() => Promise<string | undefined>) | undefined;
@@ -156,6 +172,13 @@ class Session implements vscode.Disposable {
       }
       this.onProgress?.(this.currentCommit, this.tree.fixedIds());
       this.savePanel(this.tree.allFindings(), this.tree.fixedIds());
+
+      // Everything this review raised has been dealt with, so the outcome is
+      // final — there is nothing left for the developer to do to it.
+      const mine = this.pushed?.findingIds ?? [];
+      const done = new Set(this.tree.fixedIds());
+      const allDealtWith = mine.length > 0 && mine.every((fid) => done.has(fid));
+      this.scheduleRepush(allDealtWith);
     };
 
     // Green comes from two places: the reviewer confirming a fix on re-read,
@@ -317,6 +340,12 @@ class Session implements vscode.Disposable {
       log.info("A review is already running — skipping this one");
       return;
     }
+    // A new commit closes the previous review: whatever the developer did or
+    // did not do about those findings, that is the answer now. Without this a
+    // review nobody touched stays unfinalized for ever and is never scored —
+    // which is exactly how ignoring every finding becomes invisible.
+    this.finalizePrevious();
+
     this.reviewing = true;
     const triggeredAt = new Date();
 
@@ -428,6 +457,79 @@ class Session implements vscode.Disposable {
     }
   }
 
+  /**
+   * Re-push the current review with what the developer has actually done.
+   *
+   * Debounced: working through a list of findings produces a burst of ticks,
+   * and each one would otherwise be its own upload. The endpoint is idempotent
+   * on review.id, so this overwrites the earlier push in place rather than
+   * filing a second review.
+   */
+  private scheduleRepush(finalized = false): void {
+    if (!this.pushed) return;
+    if (this.repushTimer) clearTimeout(this.repushTimer);
+    this.repushTimer = setTimeout(() => {
+      void this.repush(finalized).catch((err) =>
+        log.warn(`Could not update the review on the dashboard: ${String(err)}`),
+      );
+    }, finalized ? 0 : 3_000);
+  }
+
+  /**
+   * Send the outcome of a review that has already been pushed once.
+   *
+   * `finalized` says the developer is done — sent when every finding has been
+   * dealt with, and when the next commit closes this review out. Until then the
+   * dashboard gets live counts but is told not to score them yet, because a
+   * developer half-way through a list is not a developer who fixed half of it.
+   */
+  private async repush(finalized: boolean): Promise<void> {
+    const pushed = this.pushed;
+    if (!pushed) return;
+
+    const endpoint = readEndpoint(pushed.root);
+    if (!endpoint) return;
+
+    // Only findings from the review being updated. The panel also shows ones
+    // carried over from earlier commits, and those belong to their own reports.
+    const fixed = new Set(this.tree.fixedIds().filter((id) => pushed.findingIds.includes(id)));
+    const outcomes = new Map<string, { status: "applied" }>();
+    for (const id of fixed) outcomes.set(id, { status: "applied" });
+
+    const { report } = buildReport({
+      ...pushed.input,
+      reviewId: pushed.reviewId,
+      outcomes,
+      finalized,
+    });
+
+    const token = await this.ingestToken?.();
+    const result = await deliver(pushed.root, report, {
+      endpoint,
+      ...(token ? { token } : {}),
+    });
+
+    if (result.permanentFailure) {
+      reportRejection(result, endpoint);
+      return;
+    }
+    log.info(
+      `Updated review ${pushed.reviewId.slice(0, 8)} on the dashboard — ` +
+        `${fixed.size}/${pushed.findingIds.length} fixed${finalized ? ", finalized" : ""}` +
+        `${result.uploaded ? "" : " (queued)"}`,
+    );
+  }
+
+  /** Close out the previous review: the developer has moved on to a new commit. */
+  private finalizePrevious(): void {
+    if (!this.pushed) return;
+    if (this.repushTimer) clearTimeout(this.repushTimer);
+    void this.repush(true).catch((err) =>
+      log.warn(`Could not finalize the previous review: ${String(err)}`),
+    );
+    this.pushed = undefined;
+  }
+
   private async report(
     repoRoot: string,
     commit: CommitInfo,
@@ -442,7 +544,7 @@ class Session implements vscode.Disposable {
       // Read fresh rather than reusing what activation saw: the branch, the
       // dirty flag and even the remote can all have changed since.
       const context = await readRepoContext(repoRoot);
-      const { report, redactionHits } = buildReport({
+      const reportInput: ReportInput = {
         repo: { ...context, head: commit.sha, headShort: commit.shortSha },
         stats,
         findings,
@@ -459,7 +561,8 @@ class Session implements vscode.Disposable {
         completedAt: new Date(),
         extensionVersion: this.extensionVersion,
         ...(this.cliVersion ? { cliVersion: this.cliVersion } : {}),
-      });
+      };
+      const { report, redactionHits } = buildReport(reportInput);
 
       // The commit is the unit the dashboard measures, so it travels with the
       // report rather than being inferred from a branch name later.
@@ -485,6 +588,20 @@ class Session implements vscode.Disposable {
         reportRejection(result, endpoint);
         return;
       }
+
+      // Remember this review so ticking a finding can update it in place. The
+      // ids come from the report, not the panel: the panel also shows findings
+      // carried over from earlier commits, which belong to other reports.
+      this.pushed = {
+        // The report types these as loose records, so narrow them here rather
+        // than trusting the shape at the point of use.
+        reviewId: String(report.review["id"] ?? ""),
+        root: repoRoot,
+        findingIds: report.findings
+          .map((f) => f["id"])
+          .filter((id): id is string => typeof id === "string"),
+        input: reportInput,
+      };
 
       log.info(
         result.uploaded
@@ -1073,8 +1190,43 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     await context.secrets.store(TOKEN_KEY, value);
     warnedAboutToken = false;
     log.info("Ingest token stored.");
-    void vscode.window.showInformationMessage(
-      "CR-Track: ingest token saved. It will be used from your next commit.",
+
+    // Say now whether it works, rather than at the next commit. A token that
+    // was mistyped, revoked, or minted for somewhere else is indistinguishable
+    // from a working one until something is sent, and the first person to find
+    // out is usually the one wondering why the dashboard is empty.
+    const endpoint = readEndpoint(
+      session?.repos[0]?.root ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    );
+    if (!endpoint) {
+      void vscode.window.showInformationMessage(
+        "CR-Track: token saved. No dashboard is configured, so reports stay on disk.",
+      );
+      return;
+    }
+
+    const verdict = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: "CR-Track: checking your token…" },
+      () => checkToken(endpoint, value),
+    );
+
+    if (verdict === "ok") {
+      log.info(`Ingest token accepted by ${endpoint}.`);
+      void vscode.window.showInformationMessage(
+        "CR-Track: token accepted. Your next commit will be recorded.",
+      );
+      return;
+    }
+    if (verdict === "unauthorized") {
+      log.warn(`The dashboard rejected the token (${endpoint}).`);
+      void vscode.window.showErrorMessage(
+        "CR-Track: the dashboard rejected that token. Check it was copied whole, and that it has not been revoked.",
+      );
+      return;
+    }
+    log.warn(`Could not reach ${endpoint} to check the token.`);
+    void vscode.window.showWarningMessage(
+      "CR-Track: token saved, but the dashboard could not be reached to check it. It will be used anyway.",
     );
   });
 

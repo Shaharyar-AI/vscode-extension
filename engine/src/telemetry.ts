@@ -157,6 +157,30 @@ function enqueue(repoRoot: string, report: Report, body: string): void {
   }
 }
 
+/** What a token turned out to be worth. */
+export type TokenCheck = "ok" | "unauthorized" | "unreachable";
+
+/**
+ * Check a token without leaving anything behind.
+ *
+ * Deliberately sends a payload the server must reject. Auth is checked before
+ * validation, so the status separates the two questions: 422 means the token
+ * was accepted and only the body was refused, 401 means the token was not.
+ * Sending a *valid* probe would answer the same question by writing a junk
+ * review into the dashboard for every developer who ever sets a token.
+ */
+export async function checkToken(
+  endpoint: string,
+  token: string,
+  timeoutMs = 15_000,
+): Promise<TokenCheck> {
+  const result = await post(endpoint, "{}", token, timeoutMs);
+  if (result.status === 401 || result.status === 403) return "unauthorized";
+  if (result.status === undefined) return "unreachable";
+  // Anything the server answered at all means it read our credentials first.
+  return "ok";
+}
+
 interface PostResult {
   ok: boolean;
   status?: number;

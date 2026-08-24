@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
-const E = __dirname;
+// This script lives in engine/scripts, so the engine root is one level up.
+const E = path.resolve(__dirname, "..");
 const { buildPrompt, USER_PROMPT, USER_PROMPT_FILES } = require(path.join(E, "dist", "prompt.js"));
 const { guidesFor } = require(path.join(E, "dist", "languages.js"));
 const { DEFAULT_CONFIG } = require(path.join(E, "dist", "types.js"));

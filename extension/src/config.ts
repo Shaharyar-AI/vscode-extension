@@ -68,6 +68,7 @@ export function readSettings(repoRoot: string | undefined): Settings {
     effort: vs.get<EngineConfig["effort"]>("effort", DEFAULT_CONFIG.effort),
     profile: vs.get<EngineConfig["profile"]>("profile", DEFAULT_CONFIG.profile),
     minSeverity: vs.get<EngineConfig["minSeverity"]>("minSeverity", DEFAULT_CONFIG.minSeverity),
+    minConfidence: vs.get<number>("minConfidence", DEFAULT_CONFIG.minConfidence),
     timeoutMs: vs.get<number>("timeoutSeconds", 300) * 1000,
   };
 

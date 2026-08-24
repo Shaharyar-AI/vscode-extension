@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -102,7 +102,8 @@
       {
         "command": "crTrack.setIngestToken",
         "title": "Set ingest token",
-        "category": "CR-Track"
+        "category": "CR-Track",
+        "icon": "$(key)"
       }
     ],
     "viewsContainers": {
@@ -161,6 +162,11 @@
           "command": "crTrack.retryDetection",
           "when": "view == crTrack.findings",
           "group": "overflow@0"
+        },
+        {
+          "command": "crTrack.setIngestToken",
+          "when": "view == crTrack.findings",
+          "group": "navigation@2"
         }
       ],
       "commandPalette": [
@@ -274,6 +280,13 @@
           "type": "number",
           "default": 300,
           "description": "Abandon a review that runs longer than this."
+        },
+        "crTrack.minConfidence": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Findings the reviewer is less sure of than this are discarded. The prompt asks for 0.8; this enforces it, so a drifting model cannot raise the noise floor on its own."
         }
       }
     }

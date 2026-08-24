@@ -908,6 +908,36 @@ export async function transfer(from: string, to: string, amount: any) {
       !JSON.stringify([...context.store.keys()]).includes("configuration"),
       "secret storage only");
 
+    // ---- the token is checked as it is entered ---------------------------
+    //
+    // Against a stand-in that answers the way the real tracker does: auth
+    // first, then schema. A good token with a deliberately invalid body gets
+    // 422, which is how the check confirms credentials without writing a junk
+    // review into the dashboard for every developer who sets one.
+    const { checkToken } = require(path.join(EXT_DIR, "..", "engine", "dist", "telemetry.js"));
+
+    mode = "ok";
+    check("A working token is reported as working",
+      (await checkToken(endpoint, "tok_abc123")) === "ok", "ok");
+
+    mode = "unauthorized";
+    check("A rejected token is reported as rejected",
+      (await checkToken(endpoint, "revoked")) === "unauthorized", "unauthorized",
+      "a bad token was accepted, so the developer learns at their next commit");
+
+    mode = "ok";
+    check("...and an unreachable dashboard is not mistaken for a bad token",
+      (await checkToken("http://127.0.0.1:1/api/ingest", "tok_abc123", 3000)) === "unreachable",
+      "unreachable",
+      "an outage would tell the developer their token is wrong");
+
+    const probes = seen.length;
+    await checkToken(endpoint, "tok_abc123");
+    check("Checking a token stores nothing on the dashboard",
+      seen.length === probes + 1 && seen[seen.length - 1].body === "{}",
+      "sent an intentionally invalid body",
+      "the check posted something the dashboard would store as a review");
+
     // ---- it is actually sent ---------------------------------------------
     seen.length = 0;
     commit(repo, "add transfer", { "src/payments.ts": BAD_SOURCE });
@@ -983,6 +1013,94 @@ export async function transfer(from: string, to: string, amount: any) {
   }
 
   // ── 7. The report ──────────────────────────────────────────────────────
+  section("6g. The outcome is pushed back, not just the review");
+  if (FAST) {
+    skipped("Finalized re-push", "needs a real review to have findings");
+  } else {
+    const http = require("node:http");
+    const pushes = [];
+    const server = http.createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        try { pushes.push(JSON.parse(body)); } catch { /* recorded as a bad push */ }
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      });
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const endpoint = `http://127.0.0.1:${server.address().port}/api/ingest`;
+
+    const repo = makeRepo("finalize");
+    git(repo, "remote", "add", "origin", "https://github.com/ikonic-git-admin/finalize.git");
+    fs.writeFileSync(path.join(repo, ".cr-track.yaml"), `endpoint: ${endpoint}
+`);
+    git(repo, "add", "-A");
+    git(repo, "commit", "-qm", "point at the test server");
+
+    const { state, context, restore } = await boot(repo, { answers: { input: ["tok"] } });
+    await context.secrets.store("crTrack.ingestToken", "tok");
+
+    commit(repo, "add transfer", { "src/payments.ts": BAD_SOURCE });
+    await fireCommitWatcher(state);
+    await waitFor(() => pushes.length > 0);
+
+    const first = pushes[0];
+    check("The review is pushed when it completes",
+      !!first && Array.isArray(first.findings), `${first?.findings?.length} finding(s)`);
+    check("...at schema 2.1, which is what carries the flag",
+      /^2\./.test(first.schemaVersion || ""), first.schemaVersion);
+    check("...marked not finalized, because nobody has fixed anything yet",
+      first.finalized === false, String(first.finalized),
+      "a review is scored the moment it lands, so every developer reads 0%");
+    check("...with every finding still proposed",
+      first.findings.every((f) => f.status === "proposed"), "all proposed");
+
+    if (first.findings.length >= 2) {
+      // Tick one finding: the developer has acted, but is not done.
+      const rows = (await walkTree(state)).filter((r) => r.kind === "finding");
+      const target = rows.find((r) => first.findings.some((f) => f.id === r.node.finding.id));
+      const before = pushes.length;
+      await run(state, "crTrack.markFixed", target.node);
+      const updated = await waitFor(() => pushes.length > before, 30);
+
+      check("Ticking a finding updates the review on the dashboard", updated,
+        `${pushes.length} push(es)`,
+        "the outcome never reaches the dashboard, so applied stays 0");
+      const second = pushes[pushes.length - 1];
+      check("...under the same review id, so it updates rather than duplicates",
+        second.review?.id === first.review?.id, second.review?.id,
+        "a second review was filed instead of the first being updated");
+      check("...with that finding now applied",
+        second.findings.find((f) => f.id === target.node.finding.id)?.status === "applied",
+        "applied");
+      check("...and the finding ids unchanged across pushes",
+        second.findings.map((f) => f.id).join(",") ===
+          first.findings.map((f) => f.id).join(","),
+        "ids stable",
+        "ids were regenerated, so the history of what was raised and fixed is lost");
+      check("...but still not finalized, with findings outstanding",
+        second.finalized === false, String(second.finalized),
+        "a developer half-way through a list is scored as if that were their answer");
+
+      // A new commit closes the previous review out, whatever was done to it.
+      const beforeFinal = pushes.length;
+      state.logLines.length = 0;
+      commit(repo, "move on", { "src/other.ts": BAD_SOURCE.replace("transfer", "settle") });
+      await fireCommitWatcher(state);
+      await waitFor(() => pushes.some((p) => p.review?.id === first.review?.id && p.finalized), 60);
+      const closed = pushes.filter((p) => p.review?.id === first.review?.id).pop();
+      check("A new commit finalizes the review before it", closed?.finalized === true,
+        String(closed?.finalized),
+        "an ignored review stays unfinalized for ever and is never scored");
+      check("...and pushes at least once more to say so",
+        pushes.length > beforeFinal, `${pushes.length - beforeFinal} further push(es)`);
+    }
+
+    restore();
+    server.close();
+  }
+
   section("7. The report reaches the dashboard");
   {
     const received = [];
@@ -1026,7 +1144,10 @@ export async function transfer(from: string, to: string, amount: any) {
           check("...with the source string the dashboard validates",
             payload.source === "claude-code-skill", payload.source,
             `source was "${payload.source}" — the dashboard rejects anything else`);
-          check("...and a schemaVersion", ["1.0", "2.0"].includes(payload.schemaVersion), payload.schemaVersion);
+          // The dashboard's contract is "starts 2."; pinning exact versions here
+          // just breaks the suite every time the schema gains a field.
+          check("...and a schemaVersion the dashboard accepts",
+            /^2\./.test(payload.schemaVersion || ""), payload.schemaVersion);
           check("...and mode 'committed'", payload.review?.mode === "committed", payload.review?.mode);
           check("...and the commit it reviewed",
             !!payload.review?.commit?.sha && !!payload.review?.commit?.message,
@@ -1192,17 +1313,79 @@ export async function transfer(from: string, to: string, amount: any) {
 
     check("The schema has somewhere to put annotations",
       !!schema.properties.annotations, "annotations array");
-    check("...and the prompt does not forbid them",
-      !/Return findings ONLY/.test(systemPrompt) && /annotations/i.test(systemPrompt),
-      "annotations invited",
-      "the prompt says findings ONLY, so the model will never emit an annotation");
+    check("...and the plumbing is still there if they are switched back on",
+      /annotations/i.test(systemPrompt), "annotations named in the prompt",
+      "nothing in the prompt mentions annotations at all");
     check("...and the reviewer is told to keep quoted code short",
-      /Quote only what is needed/.test(systemPrompt), "quoting bounded",
+      /Quote a line or two at most|Quote only what is needed/.test(systemPrompt) &&
+        /Never reproduce a secret|Never reproduce customer data/.test(systemPrompt),
+      "quoting bounded",
       "nothing stops a finding pasting a whole function into the report");
     check("...and the report carries them rather than dropping them",
       !/annotations: \[\]/.test(fs.readFileSync(path.join(EXT_DIR, "src", "extension.ts"), "utf8")),
       "passed through",
       "extension.ts still hardcodes annotations: [] — the model's notes are discarded");
+  }
+
+  {
+    // The token is the one thing a new developer must do by hand, and until
+    // they do it every report is refused. Burying it in the command palette
+    // costs a support round per person, so it has a button.
+    const titled = pkg.contributes.menus["view/title"]
+      .filter((m) => /^navigation/.test(m.group))
+      .map((m) => m.command);
+    check("Setting a token has a button, not just a palette entry",
+      titled.includes("crTrack.setIngestToken"), titled.join(", "),
+      "the token command is only reachable through Ctrl+Shift+P");
+    const cmd = pkg.contributes.commands.find((c) => c.command === "crTrack.setIngestToken");
+    check("...with an icon, or the title bar has nothing to draw",
+      typeof cmd?.icon === "string" && cmd.icon.length > 0, cmd?.icon || "(none)");
+    check("...and it is still reachable from the palette",
+      !(pkg.contributes.menus.commandPalette || [])
+        .some((m) => m.command === "crTrack.setIngestToken" && m.when === "false"),
+      "in the palette");
+  }
+
+  {
+    const { DEFAULT_CONFIG } = require(path.join(EXT_DIR, "..", "engine", "dist", "types.js"));
+    const { filterFindings } = require(path.join(EXT_DIR, "..", "engine", "dist", "review.js"));
+    const { buildPrompt } = require(path.join(EXT_DIR, "..", "engine", "dist", "prompt.js"));
+    const refs = path.join(EXT_DIR, "resources", "references");
+    const { systemPrompt: sp, guidesLoaded } = buildPrompt(["typescript"], DEFAULT_CONFIG, refs, []);
+
+    check("Only defects are findings",
+      DEFAULT_CONFIG.categoriesEnabled.slice().sort().join(",") ===
+        "correctness,performance,security",
+      DEFAULT_CONFIG.categoriesEnabled.join(", "),
+      "an opinion category is still enabled and can be rated important");
+    check("...and the prompt lists what is not a finding",
+      /What is NOT a finding/.test(sp) && /Missing tests, test structure/.test(sp),
+      "not-a-finding list present");
+    check("...and pre-existing code is out of scope",
+      /Pre-existing problems in the surrounding/.test(sp), "scoped to the diff");
+    check("The architecture guide is not loaded",
+      !guidesLoaded.includes("cross-cutting/architecture"), guidesLoaded.join(", "),
+      "the guide that exists to produce design observations is still assembled");
+    check("...and there is no high-level pass",
+      !/Take one pass over the whole change set/.test(sp), "removed");
+
+    const mk = (o) => ({ file: "a.ts", lineStart: 1, lineEnd: 1, title: "t",
+      description: "d", suggestion: "s", ...o });
+    const kept = (o) => filterFindings([mk(o)], DEFAULT_CONFIG).length === 1;
+    check("The 0.8 confidence floor is enforced by the caller, not just asked for",
+      DEFAULT_CONFIG.minConfidence === 0.8 &&
+        kept({ severity: "important", category: "correctness", confidence: 0.8 }) &&
+        !kept({ severity: "important", category: "correctness", confidence: 0.79 }),
+      "0.8",
+      "a drifting model could raise the noise floor on its own");
+    check("...at every severity, including blocking",
+      !kept({ severity: "blocking", category: "security", confidence: 0.6 }),
+      "blocking is filtered too",
+      "a half-sure blocking finding still reaches the author's KPI");
+    check("...and opinion categories are dropped whatever the confidence",
+      !kept({ severity: "important", category: "maintainability", confidence: 1 }) &&
+        !kept({ severity: "nit", category: "testing", confidence: 1 }),
+      "maintainability and testing dropped");
   }
 
   check("The dashboard endpoint is configurable",

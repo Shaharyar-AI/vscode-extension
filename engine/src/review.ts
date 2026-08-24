@@ -313,16 +313,17 @@ function severityRank(s: string): number {
 export function filterFindings(findings: RawFinding[], config: EngineConfig): RawFinding[] {
   const threshold = severityRank(config.minSeverity);
   const enabled = new Set<string>(config.categoriesEnabled);
-  // `balanced` keeps low-severity findings only when the model is confident.
-  const minConfidence = config.profile === "assertive" ? 0 : config.profile === "chill" ? 0.7 : 0.5;
+  const floor = config.minConfidence ?? DEFAULT_CONFIG.minConfidence;
 
   return findings.filter((f) => {
     if (!f || typeof f.file !== "string") return false;
     if (!enabled.has(f.category)) return false;
     const rank = severityRank(f.severity);
     if (rank > threshold) return false;
-    const soft = rank >= severityRank("nit");
-    if (soft && typeof f.confidence === "number" && f.confidence < minConfidence) return false;
+    // The floor applies at every severity, not just the low ones. A blocking
+    // finding the reviewer is only half sure of is the expensive kind of wrong:
+    // it is the severity that counts against the author.
+    if (typeof f.confidence === "number" && f.confidence < floor) return false;
     if (config.profile === "chill" && rank > severityRank("important")) return false;
     return true;
   });
