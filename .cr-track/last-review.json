@@ -3,22 +3,22 @@
   "source": "claude-code-skill",
   "ruleset": "coderabbit-style@2.0",
   "review": {
-    "id": "f91fd610-34c5-4867-a784-9339367db04c",
-    "triggeredAt": "2026-08-24T12:20:32.596Z",
-    "completedAt": "2026-08-24T12:22:02.504Z",
-    "durationMs": 68617,
+    "id": "a7d3a3f0-470c-4a54-a019-1c661fc17a99",
+    "triggeredAt": "2026-08-24T12:44:10.682Z",
+    "completedAt": "2026-08-24T12:46:36.397Z",
+    "durationMs": 132309,
     "status": "completed",
     "mode": "committed",
     "model": "claude-opus-5",
     "effort": "medium",
     "secondPass": false,
     "commit": {
-      "sha": "b1a728b6d60e36947cc591da863e84045f0c06c7",
-      "shortSha": "b1a728b",
-      "message": "Keep whole-file review working under the defect-only prompt (0.9.1)",
+      "sha": "41115f345c133e1b57274b0a870f7a83edee9391",
+      "shortSha": "41115f3",
+      "message": "Take the dashboard down without taking the extension with it",
       "authorName": "Shaharyar-AI",
       "authorEmail": "shaharyar_shabbir@ikonicsolution.com",
-      "authoredAt": "2026-08-24T17:20:30+05:00"
+      "authoredAt": "2026-08-24T17:44:08+05:00"
     }
   },
   "developer": {
@@ -31,74 +31,74 @@
     "remote": "https://github.com/ikonic-git-admin/claude-skills.git",
     "branch": "main",
     "baseBranch": "main",
-    "commitBefore": "b1a728b",
+    "commitBefore": "41115f3",
     "isDirty": false,
     "host": "github.com",
     "owner": "ikonic-git-admin",
     "repo": "ikonic-git-admin/claude-skills"
   },
   "project": {
-    "primaryLanguage": "JSON"
+    "primaryLanguage": "JavaScript"
   },
   "diffStats": {
     "filesChanged": 8,
-    "linesAdded": 208,
-    "linesRemoved": 97,
+    "linesAdded": 118,
+    "linesRemoved": 885,
     "files": [
       {
         "path": ".cr-track/last-review.json",
         "language": "JSON",
-        "linesAdded": 171,
-        "linesRemoved": 89,
+        "linesAdded": 39,
+        "linesRemoved": 155,
         "changeType": "modified"
       },
       {
-        "path": "dashboard/public/version.txt",
-        "language": null,
-        "linesAdded": 1,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "dist-r2/version.txt",
-        "language": null,
-        "linesAdded": 1,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "docs/PROMPT.md",
+        "path": "dashboard/README.md",
         "language": "Markdown",
-        "linesAdded": 1,
-        "linesRemoved": 1,
+        "linesAdded": 22,
+        "linesRemoved": 95,
         "changeType": "modified"
       },
       {
-        "path": "engine/src/prompt.ts",
-        "language": "TypeScript",
-        "linesAdded": 11,
+        "path": "dashboard/api/_store.js",
+        "language": "JavaScript",
+        "linesAdded": 0,
+        "linesRemoved": 68,
+        "changeType": "deleted"
+      },
+      {
+        "path": "dashboard/api/ingest.js",
+        "language": "JavaScript",
+        "linesAdded": 41,
+        "linesRemoved": 113,
+        "changeType": "modified"
+      },
+      {
+        "path": "dashboard/api/review.js",
+        "language": "JavaScript",
+        "linesAdded": 0,
+        "linesRemoved": 23,
+        "changeType": "deleted"
+      },
+      {
+        "path": "dashboard/api/reviews.js",
+        "language": "JavaScript",
+        "linesAdded": 0,
+        "linesRemoved": 16,
+        "changeType": "deleted"
+      },
+      {
+        "path": "dashboard/package.json",
+        "language": "JSON",
+        "linesAdded": 1,
         "linesRemoved": 4,
         "changeType": "modified"
       },
       {
-        "path": "extension/CHANGELOG.md",
-        "language": "Markdown",
-        "linesAdded": 10,
-        "linesRemoved": 0,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/package.json",
-        "language": "JSON",
-        "linesAdded": 1,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/test/qa.js",
-        "language": "JavaScript",
-        "linesAdded": 12,
-        "linesRemoved": 0,
+        "path": "dashboard/public/index.html",
+        "language": "HTML",
+        "linesAdded": 15,
+        "linesRemoved": 411,
         "changeType": "modified"
       }
     ]
@@ -106,15 +106,49 @@
   "findings": [
     {
       "id": "f1",
-      "file": "engine/src/prompt.ts",
-      "lineStart": 275,
-      "lineEnd": 278,
+      "file": "dashboard/api/ingest.js",
+      "lineStart": 14,
+      "lineEnd": 16,
       "severity": "important",
+      "category": "testing",
+      "title": "Live end-to-end test still reads the deleted listing endpoints",
+      "description": "`extension/test/live.js` reads back every assertion through `GET /api/reviews?limit=500` (lines 52 and 127) and `GET /api/review?key=...` (line 151). Both routes are removed in this change, so the readback block can never find the review: \"The review appears on the dashboard\" and the eight assertions nested under it now fail permanently, and the suite exits 1. Nothing in the change set updates or retires that test.",
+      "suggestion": "Consider trimming `live.js` to what this host can still prove — the extension posts and logs \"Report sent to the dashboard\" — and moving the readback assertions to a test aimed at the team tracker, or marking the readback section skipped with a note pointing at the tracker.",
+      "confidence": 0.9,
+      "hadPatch": false,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f2",
+      "file": "dashboard/api/ingest.js",
+      "lineStart": 21,
+      "lineEnd": 25,
+      "severity": "nit",
       "category": "correctness",
-      "title": "Override quotes a phrase the system prompt never uses",
-      "description": "The override tells the model \"where it says 'what this change introduced'\", but the system prompt's actual wording is \"Anything this diff did not introduce\" (prompt.ts:94) and \"keep only what the changed lines introduce\" (prompt.ts:165). Since no rule matches the quoted string, the model has to guess which rule is being carved out — the exact ambiguity this change exists to remove. The Scope discipline section (\"you have drifted into reviewing the file instead of the change\") is also left untouched, and it pushes in the same suppressing direction.",
-      "suggestion": "Consider anchoring the exception to the wording that is actually in the system prompt, and naming the scope-discipline rule too, so both suppressing rules are covered.",
-      "confidence": 0.62,
+      "title": "CORS headers and the OPTIONS branch dropped",
+      "description": "The old handler set `access-control-allow-*` and answered OPTIONS with 204. Neither survives, so any browser-origin sender now fails preflight with 405 and would fail the POST too — which is exactly the \"queue and retry forever\" outcome this shim was written to avoid, just for a different class of client. The VS Code extension posts from Node and is unaffected; whether any browser sender still exists is the open question.",
+      "suggestion": "If nothing browser-based ever posted here apart from the removed page, a line in the file comment saying so would settle it; otherwise consider restoring the OPTIONS branch and the allow-origin header on the POST response.",
+      "confidence": 0.5,
+      "hadPatch": false,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    },
+    {
+      "id": "f3",
+      "file": "dashboard/api/ingest.js",
+      "lineStart": 22,
+      "lineEnd": 25,
+      "severity": "nit",
+      "category": "maintainability",
+      "title": "GET now answers 405 instead of pointing at the new tracker",
+      "description": "The retired handler answered GET with a short JSON description so someone pasting the URL into a browser could see what the route was. Now the one audience this shim exists for — people on an old install trying to work out where their reports went — gets `{\"ok\":false,\"error\":\"method not allowed\"}` with no mention of `MOVED_TO`.",
+      "suggestion": "Consider answering GET with the same deprecation pointer the POST path returns, so the migration message is reachable without crafting a POST.",
+      "confidence": 0.65,
       "hadPatch": true,
       "status": "proposed",
       "accepted": false,
@@ -125,30 +159,32 @@
   "annotations": [
     {
       "id": "a1",
-      "file": "engine/src/prompt.ts",
-      "lineStart": 272,
-      "lineEnd": 274,
+      "file": "dashboard/api/ingest.js",
+      "lineStart": 8,
+      "lineEnd": 16,
       "severity": "praise",
-      "category": "docs",
-      "title": "The comment records the failure mode, not the code",
-      "description": "\"without this sentence that rule suppresses every finding and the review comes back empty\" is exactly the kind of comment that survives — it explains why the sentence cannot be deleted, which is not recoverable from reading the string. The matching rationale on the QA check means the next person hits the same explanation from either direction."
+      "category": "maintainability",
+      "title": "The reason for keeping a dead route is written down",
+      "description": "The header explains precisely why deleting the route would be worse than keeping it — a 404 or 410 reads as retryable to the client, so old installs would grow a queue with no visible symptom. That is the kind of decision that gets \"cleaned up\" a year later by someone who sees an endpoint that stores nothing; the comment is what stops that."
     }
   ],
   "changes": [],
   "summary": {
-    "findingsTotal": 1,
+    "findingsTotal": 3,
     "bySeverity": {
       "blocking": 0,
       "important": 1,
-      "nit": 0,
+      "nit": 2,
       "suggestion": 0
     },
     "byCategory": {
-      "correctness": 1
+      "testing": 1,
+      "correctness": 1,
+      "maintainability": 1
     },
     "applied": 0,
     "dismissed": 0,
-    "outstanding": 1,
+    "outstanding": 3,
     "patchesOffered": 1,
     "reviewerTimeSavedMin": 0,
     "annotations": {
