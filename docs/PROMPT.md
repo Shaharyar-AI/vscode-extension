@@ -35,7 +35,7 @@ Review the unified diff provided on stdin and return findings per the schema.
 For a whole-file review (no diff available) it is replaced by:
 
 ```
-The content on stdin is one or more COMPLETE FILES, presented as an all-additions diff because that is the transport. This is not a change set: the code is existing code, not newly written. Review it as it stands and return findings per the schema. Do not report that files are new, and do not comment on the diff format itself. Line numbers in the `+` lines correspond to the real line numbers in each file.
+The content on stdin is one or more COMPLETE FILES, presented as an all-additions diff because that is the transport. This is not a change set: the code is existing code, not newly written. Every rule in the system prompt still applies, with one exception: where it says "what this change introduced", read it as "what this file contains". Defects already present in these files are in scope here, because the files themselves are the subject. Review the code as it stands and return findings per the schema. Do not report that files are new, and do not comment on the diff format itself. Line numbers in the `+` lines correspond to the real line numbers in each file.
 ```
 
 ## System prompt

@@ -1369,6 +1369,18 @@ export async function transfer(from: string, to: string, amount: any) {
     check("...and there is no high-level pass",
       !/Take one pass over the whole change set/.test(sp), "removed");
 
+    // The system prompt rules out anything the diff did not introduce. Nothing
+    // is introduced by a whole-file review, so unless that prompt overrides the
+    // rule explicitly, a whole-file review correctly reports nothing at all.
+    const { USER_PROMPT_FILES } = require(path.join(EXT_DIR, "..", "engine", "dist", "prompt.js"));
+    check("Whole-file review overrides the diff-scope rule",
+      /what this file contains/.test(USER_PROMPT_FILES) &&
+        /already present in these files are in scope/.test(USER_PROMPT_FILES),
+      "scope overridden for whole-file mode",
+      "the out-of-scope rule would suppress every finding in a whole-file review");
+    check("...while still not commenting on the transport",
+      /Do not[\s\S]*report that files are new/.test(USER_PROMPT_FILES), "transport ignored");
+
     const mk = (o) => ({ file: "a.ts", lineStart: 1, lineEnd: 1, title: "t",
       description: "d", suggestion: "s", ...o });
     const kept = (o) => filterFindings([mk(o)], DEFAULT_CONFIG).length === 1;

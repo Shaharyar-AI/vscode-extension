@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.1
+
+Fixes whole-file review, which 0.9.0 broke.
+
+- 0.9.0 ruled out "anything this diff did not introduce", which is right for a
+  commit and wrong for a whole-file review: nothing is introduced there, so the
+  rule suppressed every finding and the review came back empty. Whole-file mode
+  now says so explicitly — defects already present in the files are in scope,
+  because the files are the subject.
+
 ## 0.9.0
 
 Setting your token is a button now, and it tells you straight away whether it
