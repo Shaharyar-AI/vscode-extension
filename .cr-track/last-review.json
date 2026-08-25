@@ -1,24 +1,25 @@
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "2.1",
+  "finalized": false,
   "source": "claude-code-skill",
   "ruleset": "coderabbit-style@2.0",
   "review": {
-    "id": "a7d3a3f0-470c-4a54-a019-1c661fc17a99",
-    "triggeredAt": "2026-08-24T12:44:10.682Z",
-    "completedAt": "2026-08-24T12:46:36.397Z",
-    "durationMs": 132309,
+    "id": "63c9a4a7-e7c1-4357-a81b-41125aabfcd1",
+    "triggeredAt": "2026-08-24T16:36:44.449Z",
+    "completedAt": "2026-08-24T16:37:41.854Z",
+    "durationMs": 55407,
     "status": "completed",
     "mode": "committed",
     "model": "claude-opus-5",
     "effort": "medium",
     "secondPass": false,
     "commit": {
-      "sha": "41115f345c133e1b57274b0a870f7a83edee9391",
-      "shortSha": "41115f3",
-      "message": "Take the dashboard down without taking the extension with it",
+      "sha": "3bbb3897aea6b2dd9e2d07e5a52761bd0df4d6ee",
+      "shortSha": "3bbb389",
+      "message": "Make the installers hostable somewhere other than here",
       "authorName": "Shaharyar-AI",
       "authorEmail": "shaharyar_shabbir@ikonicsolution.com",
-      "authoredAt": "2026-08-24T17:44:08+05:00"
+      "authoredAt": "2026-08-24T21:36:42+05:00"
     }
   },
   "developer": {
@@ -31,91 +32,98 @@
     "remote": "https://github.com/ikonic-git-admin/claude-skills.git",
     "branch": "main",
     "baseBranch": "main",
-    "commitBefore": "41115f3",
+    "commitBefore": "3bbb389",
     "isDirty": false,
     "host": "github.com",
     "owner": "ikonic-git-admin",
     "repo": "ikonic-git-admin/claude-skills"
   },
   "project": {
-    "primaryLanguage": "JavaScript"
+    "primaryLanguage": "PowerShell"
   },
   "diffStats": {
-    "filesChanged": 8,
-    "linesAdded": 118,
-    "linesRemoved": 885,
+    "filesChanged": 9,
+    "linesAdded": 856,
+    "linesRemoved": 61,
     "files": [
       {
         "path": ".cr-track/last-review.json",
         "language": "JSON",
-        "linesAdded": 39,
-        "linesRemoved": 155,
+        "linesAdded": 96,
+        "linesRemoved": 60,
         "changeType": "modified"
       },
       {
-        "path": "dashboard/README.md",
+        "path": "dashboard/public/install.ps1",
+        "language": "PowerShell",
+        "linesAdded": 9,
+        "linesRemoved": 0,
+        "changeType": "modified"
+      },
+      {
+        "path": "dashboard/public/install.sh",
+        "language": "Shell",
+        "linesAdded": 9,
+        "linesRemoved": 1,
+        "changeType": "modified"
+      },
+      {
+        "path": "selfhost/README.md",
         "language": "Markdown",
-        "linesAdded": 22,
-        "linesRemoved": 95,
-        "changeType": "modified"
+        "linesAdded": 91,
+        "linesRemoved": 0,
+        "changeType": "added"
       },
       {
-        "path": "dashboard/api/_store.js",
-        "language": "JavaScript",
-        "linesAdded": 0,
-        "linesRemoved": 68,
-        "changeType": "deleted"
+        "path": "selfhost/doctor.ps1",
+        "language": "PowerShell",
+        "linesAdded": 149,
+        "linesRemoved": 0,
+        "changeType": "added"
       },
       {
-        "path": "dashboard/api/ingest.js",
-        "language": "JavaScript",
-        "linesAdded": 41,
-        "linesRemoved": 113,
-        "changeType": "modified"
+        "path": "selfhost/doctor.sh",
+        "language": "Shell",
+        "linesAdded": 135,
+        "linesRemoved": 0,
+        "changeType": "added"
       },
       {
-        "path": "dashboard/api/review.js",
-        "language": "JavaScript",
-        "linesAdded": 0,
-        "linesRemoved": 23,
-        "changeType": "deleted"
+        "path": "selfhost/install.ps1",
+        "language": "PowerShell",
+        "linesAdded": 219,
+        "linesRemoved": 0,
+        "changeType": "added"
       },
       {
-        "path": "dashboard/api/reviews.js",
-        "language": "JavaScript",
-        "linesAdded": 0,
-        "linesRemoved": 16,
-        "changeType": "deleted"
+        "path": "selfhost/install.sh",
+        "language": "Shell",
+        "linesAdded": 147,
+        "linesRemoved": 0,
+        "changeType": "added"
       },
       {
-        "path": "dashboard/package.json",
-        "language": "JSON",
+        "path": "selfhost/version.txt",
+        "language": null,
         "linesAdded": 1,
-        "linesRemoved": 4,
-        "changeType": "modified"
-      },
-      {
-        "path": "dashboard/public/index.html",
-        "language": "HTML",
-        "linesAdded": 15,
-        "linesRemoved": 411,
-        "changeType": "modified"
+        "linesRemoved": 0,
+        "changeType": "added"
       }
     ]
   },
   "findings": [
     {
       "id": "f1",
-      "file": "dashboard/api/ingest.js",
-      "lineStart": 14,
-      "lineEnd": 16,
+      "file": "selfhost/doctor.ps1",
+      "lineStart": 125,
+      "lineEnd": 127,
       "severity": "important",
-      "category": "testing",
-      "title": "Live end-to-end test still reads the deleted listing endpoints",
-      "description": "`extension/test/live.js` reads back every assertion through `GET /api/reviews?limit=500` (lines 52 and 127) and `GET /api/review?key=...` (line 151). Both routes are removed in this change, so the readback block can never find the review: \"The review appears on the dashboard\" and the eight assertions nested under it now fail permanently, and the suite exits 1. Nothing in the change set updates or retires that test.",
-      "suggestion": "Consider trimming `live.js` to what this host can still prove — the extension posts and logs \"Report sent to the dashboard\" — and moving the readback assertions to a test aimed at the team tracker, or marking the readback section skipped with a note pointing at the tracker.",
-      "confidence": 0.9,
-      "hadPatch": false,
+      "category": "correctness",
+      "title": "stderr captured into $head makes the empty-repo branch unreachable",
+      "description": "`Invoke-Native` merges stderr into its output (`2>&1 | Out-String`), so in a repository with no commits `git rev-parse --short HEAD` returns the text \"fatal: ambiguous argument 'HEAD'...\" rather than an empty string. `if ($head)` is then truthy and the script prints \"it has commits (fatal: ambiguous argument 'HEAD'…)\"; the \"no commits yet\" warning can never fire.",
+      "suggestion": "Consider validating the output shape before treating it as a sha, e.g. match against `^[0-9a-f]{4,40}$`.",
+      "confidence": 0.88,
+      "hadPatch": true,
       "status": "proposed",
       "accepted": false,
       "dismissReason": null,
@@ -123,32 +131,15 @@
     },
     {
       "id": "f2",
-      "file": "dashboard/api/ingest.js",
-      "lineStart": 21,
-      "lineEnd": 25,
+      "file": "selfhost/doctor.ps1",
+      "lineStart": 104,
+      "lineEnd": 106,
       "severity": "nit",
       "category": "correctness",
-      "title": "CORS headers and the OPTIONS branch dropped",
-      "description": "The old handler set `access-control-allow-*` and answered OPTIONS with 204. Neither survives, so any browser-origin sender now fails preflight with 405 and would fail the POST too — which is exactly the \"queue and retry forever\" outcome this shim was written to avoid, just for a different class of client. The VS Code extension posts from Node and is unaffected; whether any browser sender still exists is the open question.",
-      "suggestion": "If nothing browser-based ever posted here apart from the removed page, a line in the file comment saying so would settle it; otherwise consider restoring the OPTIONS branch and the allow-origin header on the POST response.",
-      "confidence": 0.5,
-      "hadPatch": false,
-      "status": "proposed",
-      "accepted": false,
-      "dismissReason": null,
-      "detectedBy": "llm"
-    },
-    {
-      "id": "f3",
-      "file": "dashboard/api/ingest.js",
-      "lineStart": 22,
-      "lineEnd": 25,
-      "severity": "nit",
-      "category": "maintainability",
-      "title": "GET now answers 405 instead of pointing at the new tracker",
-      "description": "The retired handler answered GET with a short JSON description so someone pasting the URL into a browser could see what the route was. Now the one audience this shim exists for — people on an old install trying to work out where their reports went — gets `{\"ok\":false,\"error\":\"method not allowed\"}` with no mention of `MOVED_TO`.",
-      "suggestion": "Consider answering GET with the same deprecation pointer the POST path returns, so the migration message is reachable without crafting a POST.",
-      "confidence": 0.65,
+      "title": "a failing `claude --version` is reported as success",
+      "description": "Same stderr-merging behaviour: if the binary exists but errors (missing DLL, bad install), `Invoke-Native` returns the error text, `$ver` is non-empty, and the doctor prints \"reports: <error text>\" as an ok line without incrementing `$script:problems` — exactly the case this section exists to catch.",
+      "suggestion": "Consider requiring the output to look like a version (e.g. `$ver -match '\\d+\\.\\d+'`) before treating it as a pass.",
+      "confidence": 0.82,
       "hadPatch": true,
       "status": "proposed",
       "accepted": false,
@@ -156,45 +147,27 @@
       "detectedBy": "llm"
     }
   ],
-  "annotations": [
-    {
-      "id": "a1",
-      "file": "dashboard/api/ingest.js",
-      "lineStart": 8,
-      "lineEnd": 16,
-      "severity": "praise",
-      "category": "maintainability",
-      "title": "The reason for keeping a dead route is written down",
-      "description": "The header explains precisely why deleting the route would be worse than keeping it — a 404 or 410 reads as retryable to the client, so old installs would grow a queue with no visible symptom. That is the kind of decision that gets \"cleaned up\" a year later by someone who sees an endpoint that stores nothing; the comment is what stops that."
-    }
-  ],
   "changes": [],
   "summary": {
-    "findingsTotal": 3,
+    "findingsTotal": 2,
     "bySeverity": {
       "blocking": 0,
       "important": 1,
-      "nit": 2,
+      "nit": 1,
       "suggestion": 0
     },
     "byCategory": {
-      "testing": 1,
-      "correctness": 1,
-      "maintainability": 1
+      "correctness": 2
     },
     "applied": 0,
     "dismissed": 0,
-    "outstanding": 3,
-    "patchesOffered": 1,
-    "reviewerTimeSavedMin": 0,
-    "annotations": {
-      "learning": 0,
-      "praise": 1
-    }
+    "outstanding": 2,
+    "patchesOffered": 2,
+    "reviewerTimeSavedMin": 0
   },
   "client": {
     "surface": "vscode-extension",
-    "extensionVersion": "0.8.0",
+    "extensionVersion": "0.9.1",
     "cliVersion": "2.1.238",
     "host": "DESKTOP-NBRJDA2",
     "os": "win32",

@@ -8,6 +8,13 @@
 # the fix for whichever one fails. Read-only: it changes nothing.
 
 set -uo pipefail
+# Cmd on macOS, Ctrl on Linux. One script serves both, and the palette shortcut
+# is the first instruction a new developer is given — printing the wrong one
+# reads as a script written for somebody else's machine.
+case "$(uname -s 2>/dev/null || echo Linux)" in
+  Darwin) MOD="Cmd" ;;
+  *)      MOD="Ctrl" ;;
+esac
 
 if [ -t 1 ]; then
   BOLD=$'\033[1m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; DIM=$'\033[2m'; OFF=$'\033[0m'
@@ -33,7 +40,15 @@ if [ -z "$CODE" ]; then
   for b in \
     "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
     "$HOME/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
-    "/usr/share/code/bin/code"
+    "/usr/share/code/bin/code" \
+    "/usr/share/code-insiders/bin/code-insiders" \
+    "/usr/share/codium/bin/codium" \
+    "/usr/bin/code" \
+    "/opt/visual-studio-code/bin/code" \
+    "/snap/bin/code" \
+    "/snap/bin/codium" \
+    "/var/lib/flatpak/exports/bin/com.visualstudio.code" \
+    "$HOME/.local/share/flatpak/exports/bin/com.visualstudio.code"
   do
     [ -x "$b" ] && { CODE="$b"; break; }
   done
@@ -49,7 +64,7 @@ if [ -n "$CODE" ]; then
   fi
 else
   no "no VS Code CLI found on PATH"
-  note "VS Code → Cmd+Shift+P → 'Shell Command: Install code command in PATH'"
+  note "VS Code → ${MOD}+Shift+P → 'Shell Command: Install code command in PATH'"
 fi
 
 # ── 2. the Claude CLI ─────────────────────────────────────────────────────
@@ -65,6 +80,24 @@ if [ -z "$CLAUDE" ]; then
   done
   if [ -z "$CLAUDE" ] && [ -d "$HOME/.nvm/versions/node" ]; then
     CLAUDE="$(find "$HOME/.nvm/versions/node" -maxdepth 3 -name claude -type f 2>/dev/null | tail -1)"
+  fi
+  # Last: the copy bundled inside the Claude Code editor extension, which puts
+  # nothing on PATH. This is the commonest reason someone insists they have
+  # Claude while every lookup above disagrees.
+  if [ -z "$CLAUDE" ]; then
+    for d in "$HOME/.vscode/extensions" "$HOME/.vscode-server/extensions" \
+             "$HOME/.vscode-insiders/extensions" "$HOME/.cursor/extensions" \
+             "$HOME/.windsurf/extensions" "$HOME/.vscode-oss/extensions"
+    do
+      [ -d "$d" ] || continue
+      for e in $(ls -d "$d"/anthropic.claude-code-* 2>/dev/null | sort -r); do
+        if [ -x "$e/resources/native-binary/claude" ]; then
+          CLAUDE="$e/resources/native-binary/claude"
+          CLAUDE_SOURCE="the Claude Code editor extension"
+          break 2
+        fi
+      done
+    done
   fi
 fi
 
@@ -128,7 +161,7 @@ printf '\n'
 if [ "$PROBLEMS" -eq 0 ]; then
   printf '%sNothing blocking found.%s\n' "$GREEN" "$OFF"
   note "If it still says inactive: open the project folder in VS Code, then"
-  note "Cmd+Shift+P → 'CR-Track: Diagnose' and send that output."
+  note "${MOD}+Shift+P → 'CR-Track: Diagnose' and send that output."
 else
   printf '%s%s problem(s) above.%s Fix those, then reload VS Code.\n' "$RED" "$PROBLEMS" "$OFF"
 fi

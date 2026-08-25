@@ -3,6 +3,20 @@
 Everything needed to serve the extension from your own origin. Drop these files
 where they are reachable over HTTPS and change one line in each installer.
 
+## There is no separate Linux installer — `install.sh` is both
+
+macOS and Linux run the same script. It detects the platform it is on and looks
+in the right places for each: the `.app` bundle on macOS, and on Linux the
+distribution package, Snap, Flatpak, and a tarball in `/opt`. The palette
+shortcut it prints follows suit — `Cmd` on macOS, `Ctrl` on Linux.
+
+So there are two installers, not three:
+
+| Platform | File |
+|---|---|
+| Windows | `install.ps1` |
+| **macOS and Linux** | `install.sh` |
+
 ## What to serve
 
 Four of these are **fetched by the installers**, so they must be reachable at

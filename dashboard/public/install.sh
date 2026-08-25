@@ -14,6 +14,13 @@
 #   CR_TRACK_FORCE  set to 1 to reinstall even if the version already matches
 
 set -euo pipefail
+# Cmd on macOS, Ctrl on Linux. One script serves both, and the palette shortcut
+# is the first instruction a new developer is given — printing the wrong one
+# reads as a script written for somebody else's machine.
+case "$(uname -s 2>/dev/null || echo Linux)" in
+  Darwin) MOD="Cmd" ;;
+  *)      MOD="Ctrl" ;;
+esac
 
 # ── The host these scripts download from ──────────────────────────────────
 #
@@ -56,16 +63,73 @@ find_code() {
     if command -v "$candidate" >/dev/null 2>&1; then printf '%s' "$candidate"; return 0; fi
   done
 
+  # Not on PATH. Look where each platform's installer actually puts it.
+  #
+  # macOS ships the CLI inside the .app bundle and only adds it to PATH when
+  # asked. Linux has no single answer at all: a distribution package, Snap,
+  # Flatpak and a tarball in /opt each land somewhere different, and a developer
+  # on Flatpak looks identical to one with no editor at all unless the exported
+  # binary is checked by name.
   local bundled
   for bundled in \
     "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
     "$HOME/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
     "/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code" \
+    "/Applications/VSCodium.app/Contents/Resources/app/bin/codium" \
     "/Applications/Cursor.app/Contents/Resources/app/bin/cursor" \
+    "/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf" \
     "/usr/share/code/bin/code" \
-    "/snap/bin/code"
+    "/usr/share/code-insiders/bin/code-insiders" \
+    "/usr/share/codium/bin/codium" \
+    "/usr/bin/code" \
+    "/usr/local/bin/code" \
+    "/opt/visual-studio-code/bin/code" \
+    "/opt/vscode/bin/code" \
+    "/snap/bin/code" \
+    "/snap/bin/code-insiders" \
+    "/snap/bin/codium" \
+    "/var/lib/flatpak/exports/bin/com.visualstudio.code" \
+    "$HOME/.local/share/flatpak/exports/bin/com.visualstudio.code" \
+    "/var/lib/flatpak/exports/bin/com.vscodium.codium" \
+    "$HOME/.local/share/flatpak/exports/bin/com.vscodium.codium" \
+    "$HOME/.local/bin/code"
   do
     [ -x "$bundled" ] && { printf '%s' "$bundled"; return 0; }
+  done
+
+  return 1
+}
+
+# Claude Code installed from the VS Code marketplace ships its own binary inside
+# the extension directory and puts nothing on PATH. Someone with a working
+# Claude in the next pane would otherwise be told they do not have one, which is
+# the most confusing way this can fail.
+find_claude() {
+  command -v claude >/dev/null 2>&1 && { command -v claude; return 0; }
+
+  local p
+  for p in \
+    "$HOME/.local/bin/claude" \
+    "$HOME/.claude/local/claude" \
+    "$HOME/.npm-global/bin/claude" \
+    "/usr/local/bin/claude" \
+    "/opt/homebrew/bin/claude" \
+    "/usr/bin/claude"
+  do
+    [ -x "$p" ] && { printf '%s' "$p"; return 0; }
+  done
+
+  local dir
+  for dir in "$HOME/.vscode/extensions" "$HOME/.vscode-server/extensions" \
+             "$HOME/.vscode-insiders/extensions" "$HOME/.cursor/extensions" \
+             "$HOME/.windsurf/extensions" "$HOME/.vscode-oss/extensions"
+  do
+    [ -d "$dir" ] || continue
+    for p in $(ls -d "$dir"/anthropic.claude-code-* 2>/dev/null | sort -r); do
+      [ -x "$p/resources/native-binary/claude" ] && {
+        printf '%s' "$p/resources/native-binary/claude"; return 0;
+      }
+    done
   done
 
   return 1
@@ -83,7 +147,7 @@ esac
 step "Looking for VS Code"
 CODE="$(find_code)" || die "VS Code was not found.
          If it is installed, open it and run:
-           Cmd+Shift+P → 'Shell Command: Install code command in PATH'
+           ${MOD}+Shift+P → 'Shell Command: Install code command in PATH'
          Then run this installer again. Or point at it directly:
            CODE_BIN=/path/to/code curl -fsSL $BASE/install.sh | bash"
 say "    ${DIM}$CODE${OFF}"
@@ -126,14 +190,15 @@ say ""
 say "${GREEN}Installed${OFF} CR-Track ${NOW}"
 
 # ── the dependency people forget ──────────────────────────────────────────
-if command -v claude >/dev/null 2>&1; then
-  say "${DIM}Claude CLI $(claude --version 2>/dev/null | head -1)${OFF}"
-elif [ -x "$HOME/.local/bin/claude" ]; then
-  say "${DIM}Claude CLI found in ~/.local/bin${OFF}"
+CLAUDE="$(find_claude || true)"
+if [ -n "$CLAUDE" ]; then
+  say "${DIM}Claude CLI $("$CLAUDE" --version 2>/dev/null | head -1)${OFF}"
+  case "$CLAUDE" in
+    */extensions/*) say "${DIM}  found inside the Claude Code editor extension${OFF}" ;;
+  esac
 else
-  say ""
-  warn "The Claude CLI was not found. CR-Track needs it to review anything,
-         and stays inactive without it:
+  warn "the Claude CLI was not found. CR-Track needs it to review anything,
+           and stays inactive without it:
 
            npm i -g @anthropic-ai/claude-code
            claude          # sign in once"
@@ -141,7 +206,7 @@ fi
 
 say ""
 say "${BOLD}Next:${OFF} reload VS Code, then commit something."
-say "  ${DIM}Cmd+Shift+P → Developer: Reload Window${OFF}"
+say "  ${DIM}${MOD}+Shift+P → Developer: Reload Window${OFF}"
 say "  ${DIM}Then set your ingest token: the key icon in the Findings panel,${OFF}"
-say "  ${DIM}or Cmd+Shift+P -> CR-Track: Set ingest token.${OFF}"
+say "  ${DIM}or ${MOD}+Shift+P -> CR-Track: Set ingest token.${OFF}"
 say ""
