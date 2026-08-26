@@ -26,6 +26,8 @@ function makeStub({ repo, answers = {}, onLog }) {
     messages: [],
     inputs: [],
     inputOptions: [],
+    config: new Map(),
+    installedVsix: [],
     treeView: undefined,
     contexts: new Map(),
     fileWatchers: [],
@@ -189,7 +191,12 @@ function makeStub({ repo, answers = {}, onLog }) {
 
     workspace: {
       workspaceFolders: repo ? [{ uri: Uri.file(repo), name: path.basename(repo), index: 0 }] : undefined,
-      getConfiguration: () => ({ get: (_k, d) => d }),
+      getConfiguration: (section) => ({
+        get: (key, fallback) => {
+          const full = section ? `${section}.${key}` : key;
+          return state.config.has(full) ? state.config.get(full) : fallback;
+        },
+      }),
       // Records its handlers so a test can fire disk events by hand — the
       // recovery path is otherwise untestable without a real file watcher.
       createFileSystemWatcher: (pattern) => {
@@ -226,6 +233,10 @@ function makeStub({ repo, answers = {}, onLog }) {
       registerCommand: (id, fn) => { state.commands.set(id, fn); return disposable(); },
       executeCommand: async (id, ...args) => {
         if (id === "setContext") { state.contexts.set(args[0], args[1]); return; }
+        if (id === "workbench.extensions.installExtension") {
+          state.installedVsix.push(String(args[0]?.fsPath ?? args[0] ?? ""));
+          return;
+        }
         const handler = state.commands.get(id);
         if (handler) return handler(...args);
         state.messages.push({ kind: "host-command", message: id });
@@ -269,7 +280,17 @@ function makeContext(extensionDir, store = new Map()) {
     subscriptions: [],
     extensionPath: extensionDir,
     extensionUri: { fsPath: extensionDir },
-    extension: { packageJSON: { version: "0.1.0" } },
+    // The real manifest version, not a placeholder: anything comparing the
+    // running version against a published one — the update check does — would
+    // otherwise be testing against a number the extension never reports.
+    extension: {
+      packageJSON: JSON.parse(
+        require("node:fs").readFileSync(
+          require("node:path").join(extensionDir, "package.json"),
+          "utf8",
+        ),
+      ),
+    },
     globalState: { get: (k) => store.get(k), update: async (k, v) => void store.set(k, v) },
     workspaceState: { get: (k) => store.get(k), update: async (k, v) => void store.set(k, v) },
     // SecretStorage, backed by the same carried-forward store so a test can

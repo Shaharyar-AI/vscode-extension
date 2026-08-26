@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.10.0
+
+An update button, so a new build is a click rather than a command to remember.
+
+- **A download icon in the Findings panel title bar.** It checks the published
+  version, and if there is a newer one, downloads and installs it, then offers
+  to reload. If there is not, it says so and downloads nothing.
+- **`crTrack.updateHost` is a separate setting from `crTrack.endpoint`.** The
+  host reports are sent to and the host the extension is downloaded from are
+  different things: a team serving the extension themselves must point this at
+  their own origin, or the button would fetch a build they never published.
+- A download that is not a `.vsix` is refused rather than handed to VS Code —
+  an error page arriving with a 200 is what a proxy or a misconfigured host
+  produces, and installing it fails several steps later with a message that
+  explains nothing. The installer scripts already guarded this; the button now
+  does too.
+- The reload prompt is not decoration. Until the window reloads the previous
+  build is still the code running, and "updated" without that reads as the
+  update having done nothing.
+
 ## 0.9.2
 
 Reports go to the tracker's real home.

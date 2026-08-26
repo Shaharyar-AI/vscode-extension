@@ -79,6 +79,21 @@ Re-running the same command is also how people update.
 - **No auth in front of these paths.** The installer is not a browser and will
   not follow a login redirect.
 
+## The Update button
+
+The extension has an update button in its Findings panel — a developer clicks it
+and gets whatever you have published. It downloads from `crTrack.updateHost`,
+which is **not** the dashboard setting, so point it at your origin:
+
+```jsonc
+// settings.json, or push it as a workspace/org setting
+"crTrack.updateHost": "https://your-host.example.com"
+```
+
+Left unset it points at our host, and your team would update to a build you did
+not publish. It reads the same `version.txt` and `cr-track-latest.vsix` the
+installers use, so nothing extra needs serving.
+
 ## Publishing a new version
 
 Replace `cr-track-latest.vsix`, write the new version into `version.txt`, done.

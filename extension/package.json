@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -104,6 +104,12 @@
         "title": "Set ingest token",
         "category": "CR-Track",
         "icon": "$(key)"
+      },
+      {
+        "command": "crTrack.update",
+        "title": "Update to the latest version",
+        "category": "CR-Track",
+        "icon": "$(cloud-download)"
       }
     ],
     "viewsContainers": {
@@ -167,6 +173,11 @@
           "command": "crTrack.setIngestToken",
           "when": "view == crTrack.findings",
           "group": "navigation@2"
+        },
+        {
+          "command": "crTrack.update",
+          "when": "view == crTrack.findings",
+          "group": "navigation@3"
         }
       ],
       "commandPalette": [
@@ -287,6 +298,11 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Findings the reviewer is less sure of than this are discarded. The prompt asks for 0.8; this enforces it, so a drifting model cannot raise the noise floor on its own."
+        },
+        "crTrack.updateHost": {
+          "type": "string",
+          "default": "https://cr-track-dashboard.vercel.app",
+          "description": "Where the Update button downloads from. This is the host serving version.txt and cr-track-latest.vsix \u2014 not the dashboard reports are sent to. Teams serving the extension themselves should point this at their own origin."
         }
       }
     }

@@ -10,7 +10,8 @@
  * way for the thing to be broken on someone else's machine.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as vscode from "vscode";
 import { readEndpoint, readSettings, type Settings } from "./config";
@@ -1165,6 +1166,97 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     const node = arg as { kind?: string; finding?: Finding } | undefined;
     return node?.kind === "finding" ? node.finding : undefined;
   };
+
+  register("crTrack.update", async () => {
+    // The host reports are sent to and the host the extension is downloaded
+    // from are different things, and a team serving the extension themselves
+    // needs this pointed at their origin — otherwise the button would fetch a
+    // build they did not publish.
+    const host = (vscode.workspace.getConfiguration("crTrack").get<string>("updateHost") ?? "")
+      .trim()
+      .replace(/\/+$/, "");
+    if (!host) {
+      void vscode.window.showWarningMessage(
+        "CR-Track: no update host is configured (crTrack.updateHost).",
+      );
+      return;
+    }
+
+    const current = String(context.extension?.packageJSON?.version ?? "0.0.0");
+
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: "CR-Track: checking for an update…" },
+      async () => {
+        let latest: string;
+        try {
+          const res = await fetch(`${host}/version.txt`);
+          if (!res.ok) throw new Error(`the server answered ${res.status}`);
+          latest = (await res.text()).trim();
+        } catch (err) {
+          log.warn(`Update check failed against ${host}: ${String(err)}`);
+          void vscode.window.showErrorMessage(
+            `CR-Track: could not reach ${host} to check for an update.`,
+          );
+          return;
+        }
+
+        if (!latest) {
+          void vscode.window.showErrorMessage("CR-Track: the update host returned no version.");
+          return;
+        }
+        if (latest === current) {
+          void vscode.window.showInformationMessage(`CR-Track is up to date (${current}).`);
+          return;
+        }
+
+        // Download to a temp file. VS Code installs from a file, not a URL.
+        const dir = mkdtempSync(join(tmpdir(), "cr-track-update-"));
+        const vsix = join(dir, `cr-track-${latest}.vsix`);
+        try {
+          const res = await fetch(`${host}/cr-track-latest.vsix`);
+          if (!res.ok) throw new Error(`the download answered ${res.status}`);
+          const bytes = Buffer.from(await res.arrayBuffer());
+
+          // A .vsix is a zip. Anything else means a proxy or an error page came
+          // back with a 200, and handing that to VS Code fails several steps
+          // later with a message that explains nothing.
+          if (bytes.length < 2 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+            throw new Error("what came back is not a .vsix");
+          }
+          writeFileSync(vsix, bytes);
+
+          await vscode.commands.executeCommand(
+            "workbench.extensions.installExtension",
+            vscode.Uri.file(vsix),
+          );
+        } catch (err) {
+          log.warn(`Update to ${latest} failed: ${String(err)}`);
+          void vscode.window.showErrorMessage(
+            `CR-Track: update to ${latest} failed — ${String(err)}. The installer command still works.`,
+          );
+          return;
+        } finally {
+          try {
+            rmSync(dir, { recursive: true, force: true });
+          } catch {
+            /* a temp directory we could not remove is not worth reporting */
+          }
+        }
+
+        log.info(`Updated from ${current} to ${latest}.`);
+        // The new build is on disk but the old one is still the code running.
+        // Saying "updated" without saying that invites someone to conclude the
+        // update did nothing when the panel behaves exactly as before.
+        const choice = await vscode.window.showInformationMessage(
+          `CR-Track updated to ${latest}. Reload the window to start using it.`,
+          "Reload window",
+        );
+        if (choice === "Reload window") {
+          await vscode.commands.executeCommand("workbench.action.reloadWindow");
+        }
+      },
+    );
+  });
 
   register("crTrack.setIngestToken", async () => {
     const existing = await context.secrets.get(TOKEN_KEY);

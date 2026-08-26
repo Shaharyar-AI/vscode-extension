@@ -1101,6 +1101,82 @@ export async function transfer(from: string, to: string, amount: any) {
     server.close();
   }
 
+  section("6h. Updating from the panel");
+  {
+    const http = require("node:http");
+    // `pkg` is scoped to section 10, so read the manifest here rather than
+    // reaching for it — the version has to match what the extension reports.
+    const manifest = JSON.parse(fs.readFileSync(path.join(EXT_DIR, "package.json"), "utf8"));
+    let mode = "newer";
+    const asked = [];
+    const server = http.createServer((req, res) => {
+      asked.push(req.url);
+      if (req.url === "/version.txt") {
+        res.writeHead(200, { "content-type": "text/plain" });
+        return res.end(mode === "same" ? manifest.version : "99.0.0");
+      }
+      if (req.url === "/cr-track-latest.vsix") {
+        res.writeHead(200, { "content-type": "application/octet-stream" });
+        // "corrupt" answers 200 with an error page, which is what a proxy or a
+        // misconfigured host does and the failure the installers already guard.
+        return res.end(mode === "corrupt" ? "<html>404 not found</html>" : "PKrest");
+      }
+      res.writeHead(404);
+      res.end();
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const host = `http://127.0.0.1:${server.address().port}`;
+
+    const repo = makeRepo("update");
+    const { state, restore } = await boot(repo);
+    state.config.set("crTrack.updateHost", host);
+
+    // ---- already current -------------------------------------------------
+    mode = "same";
+    state.messages.length = 0;
+    await run(state, "crTrack.update");
+    await waitFor(() => state.messages.length > 0);
+    check("Says so when there is nothing to update to",
+      /up to date/i.test(state.messages[state.messages.length - 1]?.message || ""),
+      state.messages[state.messages.length - 1]?.message);
+    check("...without downloading anything",
+      !asked.includes("/cr-track-latest.vsix"), asked.join(" "),
+      "it downloaded a build it already had");
+
+    // ---- a bad download is refused, not installed ------------------------
+    mode = "corrupt";
+    state.messages.length = 0;
+    state.installedVsix.length = 0;
+    await run(state, "crTrack.update");
+    await waitFor(() => state.messages.some((m) => m.kind === "error"));
+    check("An error page arriving as a 200 is refused",
+      state.installedVsix.length === 0, "nothing installed",
+      "an HTML error page was handed to VS Code as an extension");
+    check("...and the developer is told, with a way out",
+      /installer command still works/i.test(
+        state.messages.filter((m) => m.kind === "error").pop()?.message || ""),
+      "fallback offered");
+
+    // ---- the real path ---------------------------------------------------
+    mode = "newer";
+    state.messages.length = 0;
+    state.installedVsix.length = 0;
+    await run(state, "crTrack.update");
+    await waitFor(() => state.installedVsix.length > 0);
+    check("A newer version is downloaded and installed",
+      state.installedVsix.length === 1, `${state.installedVsix.length} install(s)`,
+      "the update button did not install anything");
+    check("...from a real file, since VS Code cannot install from a URL",
+      /\.vsix$/.test(state.installedVsix[0] || ""), state.installedVsix[0]);
+    check("...and a reload is offered, because the old code is still running",
+      /Reload the window/i.test(state.messages[state.messages.length - 1]?.message || ""),
+      "reload offered",
+      "it says updated while the previous build is still what is loaded");
+
+    restore();
+    server.close();
+  }
+
   section("7. The report reaches the dashboard");
   {
     const received = [];
@@ -1398,6 +1474,27 @@ export async function transfer(from: string, to: string, amount: any) {
       !kept({ severity: "important", category: "maintainability", confidence: 1 }) &&
         !kept({ severity: "nit", category: "testing", confidence: 1 }),
       "maintainability and testing dropped");
+  }
+
+  {
+    const upd = pkg.contributes.commands.find((c) => c.command === "crTrack.update");
+    const titled = pkg.contributes.menus["view/title"]
+      .filter((m) => /^navigation/.test(m.group))
+      .map((m) => m.command);
+    check("Updating is a button, not a documented command line",
+      titled.includes("crTrack.update"), titled.join(", "),
+      "a developer has to remember an install command to get a new build");
+    check("...with an icon to draw in the title bar",
+      typeof upd?.icon === "string" && upd.icon.length > 0, upd?.icon || "(none)");
+
+    // The host reports go to and the host the extension is downloaded from are
+    // different. A team serving the extension themselves must point the button
+    // at their origin, or it fetches a build they never published.
+    const host = pkg.contributes.configuration.properties["crTrack.updateHost"];
+    const endpoint = pkg.contributes.configuration.properties["crTrack.endpoint"];
+    check("...and the download host is configurable, separately from the endpoint",
+      !!host && host.default !== endpoint.default, String(host && host.default),
+      "self-hosted teams would update from someone else's server");
   }
 
   check("The dashboard endpoint is configurable",
