@@ -16,7 +16,7 @@
  * client is told the truth about where reports go now, and stops queueing.
  */
 
-const MOVED_TO = "https://ikonictracker.demosites.cc/api/ingest";
+const MOVED_TO = "https://kpi.ikonicsolution.com/api/ingest";
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {

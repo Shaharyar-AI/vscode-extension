@@ -12,7 +12,7 @@ This host serves two things:
 ## Reports do not come here any more
 
 Since 0.7.1 they go to the team tracker at
-`https://ikonictracker.demosites.cc/api/ingest`, which authenticates each
+`https://kpi.ikonicsolution.com/api/ingest`, which authenticates each
 developer with a personal ingest token.
 
 `/api/ingest` still answers here, and deliberately returns **200**. Installs

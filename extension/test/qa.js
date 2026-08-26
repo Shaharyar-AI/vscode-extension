@@ -1293,7 +1293,7 @@ export async function transfer(from: string, to: string, amount: any) {
     {
     const prop = pkg.contributes.configuration.properties["crTrack.endpoint"];
     check("Reports go to the team's tracker by default",
-      prop.default === "https://ikonictracker.demosites.cc/api/ingest", prop.default,
+      prop.default === "https://kpi.ikonicsolution.com/api/ingest", prop.default,
       `still pointing at ${prop.default}`);
     check("...and the default says a token is needed, since without one it 401s",
       /ingest token/i.test(prop.description || ""), "documented");

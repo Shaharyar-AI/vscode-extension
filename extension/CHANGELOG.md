@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.2
+
+Reports go to the tracker's real home.
+
+- `crTrack.endpoint` now defaults to `https://kpi.ikonicsolution.com/api/ingest`.
+  The previous host, `ikonictracker.demosites.cc`, no longer resolves at all —
+  so this is a fix rather than a move. On 0.9.1 every report would fail to send,
+  queue, and retry for ever.
+- Same contract, same tokens: verified against the new host before switching —
+  401 without a token, 422 for a bad payload, 200 for a real report.
+
 ## 0.9.1
 
 Fixes whole-file review, which 0.9.0 broke.
