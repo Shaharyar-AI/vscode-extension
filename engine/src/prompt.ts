@@ -272,10 +272,19 @@ export const USER_PROMPT_FILES =
   // The system prompt rules out anything "this diff did not introduce". Nothing
   // is introduced by a whole-file review, so without this sentence that rule
   // suppresses every finding and the review comes back empty.
-  "Every rule in the system prompt still applies, with one exception: where it " +
-  "says \"what this change introduced\", read it as \"what this file " +
-  "contains\". Defects already present in these files are in scope here, " +
-  "because the files themselves are the subject. " +
+  // Anchored to the wording the system prompt actually uses. Quoting a phrase
+  // that appears nowhere in it leaves the model guessing which rule is being
+  // carved out — the ambiguity this exception exists to remove. Both
+  // suppressing rules are named, because either one alone would empty the
+  // review: nothing is "introduced" here, and every finding is by definition
+  // the file rather than a change to it.
+  "Every rule in the system prompt still applies, with two exceptions, because " +
+  "there is no diff here and both rules below would otherwise rule out " +
+  "everything. Where it says \"Anything this diff did not introduce\" is out " +
+  "of scope, read the file's own contents as what was introduced: defects " +
+  "already present in these files are in scope, because the files are the " +
+  "subject. Where Scope discipline warns against \"reviewing the file instead " +
+  "of the change\", reviewing the file is the task you have been given. " +
   "Review the code as it stands and return findings per the schema. Do not " +
   "report that files are new, and do not comment on the diff format itself. " +
   "Line numbers in the `+` lines correspond to the real line numbers in each file.";

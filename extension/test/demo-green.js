@@ -88,7 +88,11 @@ const rows = (state) => {
   git(repo, "commit", "-qm", "init");
 
   const { vscode, state } = makeStub({ repo });
-  const restore = install(vscode);
+  // Nobody is present to answer the send prompt in an automated run, and an
+// unanswered prompt holds the report — which is the correct behaviour and the
+// wrong thing to test here.
+state.config.set("crTrack.confirmBeforeSending", false);
+const restore = install(vscode);
   const ext = loadExtension(BUNDLE);
   await ext.activate(makeContext(EXT_DIR));
   await sleep(1500);

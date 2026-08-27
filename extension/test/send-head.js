@@ -23,7 +23,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log(`\nReviewing ${sha.slice(0, 7)} — ${subject}\n`);
 
   const { vscode, state } = makeStub({ repo: REPO });
-  const restore = install(vscode);
+  // Nobody is present to answer the send prompt in an automated run, and an
+// unanswered prompt holds the report — which is the correct behaviour and the
+// wrong thing to test here.
+state.config.set("crTrack.confirmBeforeSending", false);
+const restore = install(vscode);
   const ext = loadExtension(path.join(EXT_DIR, "dist", "extension.js"));
   const context = makeContext(EXT_DIR);
   await ext.activate(context);
@@ -62,5 +66,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
   await ext.deactivate?.();
   restore();
-  process.exit(0);
-})();
+
+  // The wait loop above ends on failure outcomes as well as success, and on
+  // timeout it simply falls out. Exiting 0 regardless meant a rejected upload
+  // read as a successful send to anything chaining on this — a CI step, or a
+  // shell &&.
+  const delivered = /Report sent to the dashboard/.test(state.logLines.join("\n"));
+  if (!delivered) {
+    console.error("\n  the report was not delivered — see the log above");
+  }
+  process.exit(delivered ? 0 : 1);
+})().catch((err) => {
+  // Mirrors live.js. Without this, a throw leaves a bare unhandled-rejection
+  // trace, restore() never runs, and the vscode stub stays installed.
+  console.error("\nsend-head crashed:\n", err);
+  process.exit(2);
+});

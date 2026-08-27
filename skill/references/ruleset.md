@@ -62,10 +62,15 @@ severity scale above.
 - **docs** — missing or stale docstrings/comments for public APIs.
 
 ## Profile strictness
-- **chill** — report only `blocking` and clear `important`s; suppress most
-  `nit`/`suggestion`.
-- **balanced** (default) — report all, but only high-confidence `nit`/`suggestion`.
-- **assertive** — report everything, including speculative `nit`/`suggestion`.
+
+A confidence floor applies at every profile and every severity — speculative
+findings are dropped by the caller whatever the profile says, so no profile
+reports "everything".
+
+- **chill** — report only `blocking` and clear `important`s; suppress `nit`.
+- **balanced** (default) — report all severities that clear the floor.
+- **assertive** — same as balanced for what is reported; it does not lower the
+  floor. Nothing here overrides the confidence threshold.
 
 ## Cross-file impact
 For each changed file, consider the other files in the change set: a changed

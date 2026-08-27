@@ -54,12 +54,21 @@ const BAD = `export async function transfer(from: string, to: string, amount) {
 
   console.log("── Booting the extension");
   const { vscode, state } = makeStub({ repo });
-  const restore = install(vscode);
+  // Nobody is present to answer the send prompt in an automated run, and an
+// unanswered prompt holds the report — which is the correct behaviour and the
+// wrong thing to test here.
+state.config.set("crTrack.confirmBeforeSending", false);
+const restore = install(vscode);
   const ext = loadExtension(BUNDLE);
   const context = makeContext(EXT_DIR);
   await ext.activate(context);
   await sleep(1500);
-  check("The extension is active", !/ · /.test(state.statusText), state.statusText);
+  check("The extension is active",
+    typeof state.statusText === "string" &&
+      state.statusText.length > 0 &&
+      !/ · /.test(state.statusText),
+    state.statusText || "(status bar never written)",
+    "the status bar is empty, which this check used to read as active");
 
   // Store the token the way a developer would, through the real command.
   await context.secrets.store("crTrack.ingestToken", TOKEN);
@@ -98,14 +107,31 @@ const BAD = `export async function transfer(from: string, to: string, amount) {
       fs.readdirSync(path.join(repo, ".cr-track", "queue")).length === 0,
     "queue empty");
 
-  const local = JSON.parse(fs.readFileSync(path.join(repo, ".cr-track", "last-review.json"), "utf8"));
+  // The checks above are written to fail gracefully when a review times out or
+  // delivery is refused. Reading this unconditionally would then throw, so the
+  // payload checks below would never run and the summary would never print —
+  // a failed review would look like a crashed harness.
+  const localPath = path.join(repo, ".cr-track", "last-review.json");
+  if (!fs.existsSync(localPath)) {
+    check("A report was written locally", false, "",
+      "no .cr-track/last-review.json — the review never got far enough to write one");
+    await ext.deactivate?.();
+    restore();
+    console.log(`\nResult  ${pass} passed  ${fail} failed\n`);
+    process.exit(1);
+  }
+  const local = JSON.parse(fs.readFileSync(localPath, "utf8"));
   console.log("\n── What they received");
   console.log("  review.id  : " + local.review.id);
   console.log("  repository : " + local.repository.repo + " (" + local.repository.branch + ")");
   console.log("  developer  : " + local.developer.name + " <" + local.developer.email + ">");
   console.log("  findings   : " + local.findings.length);
   for (const f of local.findings.slice(0, 4)) {
-    console.log(`     ${f.severity.padEnd(10)} ${f.file}:${f.lineStart}  ${f.title}`);
+    // Defaulted so a malformed payload is reported by the check below, rather
+    // than throwing here before that check ever runs.
+    console.log(
+      `     ${String(f.severity ?? "?").padEnd(10)} ${f.file}:${f.lineStart}  ${f.title}`,
+    );
   }
   check("The payload is schema 2.x", /^2\./.test(local.schemaVersion), local.schemaVersion);
   check("...with findings carrying severity, status and accepted",
@@ -118,4 +144,11 @@ const BAD = `export async function transfer(from: string, to: string, amount) {
   restore();
   console.log(`\nResult  ${pass} passed  ${fail} failed\n`);
   process.exit(fail ? 1 : 0);
-})();
+})().catch((err) => {
+  // Without this a throw anywhere above surfaces as a bare unhandled rejection:
+  // the summary never prints and the vscode stub stays installed in the
+  // process. This test drives a real commit and a real POST, so a mid-run
+  // failure is an ordinary outcome rather than a rare one.
+  console.error("\nlive-theirs crashed:\n", err);
+  process.exit(2);
+});

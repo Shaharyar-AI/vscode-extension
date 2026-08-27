@@ -15,6 +15,8 @@ import { CATEGORIES, DEFAULT_CONFIG, type Category, type EngineConfig } from "@e
 export interface Settings extends EngineConfig {
   enabled: boolean;
   claudePath: string | undefined;
+  /** Ask before a review is recorded, so the developer can fix and recommit. */
+  confirmBeforeSending: boolean;
 }
 
 /**
@@ -69,6 +71,7 @@ export function readSettings(repoRoot: string | undefined): Settings {
     profile: vs.get<EngineConfig["profile"]>("profile", DEFAULT_CONFIG.profile),
     minSeverity: vs.get<EngineConfig["minSeverity"]>("minSeverity", DEFAULT_CONFIG.minSeverity),
     minConfidence: vs.get<number>("minConfidence", DEFAULT_CONFIG.minConfidence),
+    confirmBeforeSending: vs.get<boolean>("confirmBeforeSending", true),
     timeoutMs: vs.get<number>("timeoutSeconds", 300) * 1000,
   };
 

@@ -1,5 +1,89 @@
 # Changelog
 
+## 0.12.0
+
+Fixes for defects CR-Track found in its own last eight releases.
+
+- **A staged review no longer strands the previous commit's review.** It cleared
+  the pushed review outright instead of finalizing it, so any fixes ticked for
+  that commit were never reported and it stayed unscored for ever.
+- **`checkToken` reported a working token for a 404, 502 or 500.** Only a status
+  that proves the request got past auth into validation counts as accepted now;
+  the rest are "could not reach it", which is what they are.
+- **The debounce timer outlived the session** — a tick within three seconds of a
+  reload fired against a torn-down window.
+- **Two branches of the doctor were unreachable.** `Invoke-Native` merges
+  stderr, so an empty repository reported "it has commits (fatal: ambiguous
+  argument…)" and a Claude binary that could not run reported its error text as
+  a version. Both outputs are now shape-checked.
+- **The whole-file override quoted a rule the prompt does not contain**, leaving
+  the model to guess which rule was being carved out. It now quotes both
+  suppressing rules verbatim, and a test asserts those phrases really are in the
+  prompt.
+- The retired ingest endpoint answers GET with the migration pointer rather than
+  "method not allowed", and preflight is handled again.
+- The ruleset no longer claims `assertive` reports everything; the confidence
+  floor applies at every profile.
+
+Test defects, which matter because a test that cannot fail is worse than none:
+
+- `live.js` read back through two endpoints that were deleted, so it could only
+  fail from here on. That readback moved to the tracker test.
+- `send-head.js` exited 0 whether the report was delivered, rejected, or never
+  finished — a CI step would have read a rejection as a send.
+- Two harnesses had no rejection handler, so a throw left the vscode stub
+  installed and skipped the summary.
+- The annotations check passed on a prompt that disables annotations; it asserts
+  the plumbing now.
+- Assertions that formatted or dereferenced a value before the check meant to
+  report it was missing.
+
+## 0.12.0
+
+Nothing is recorded against you without being asked first.
+
+- **A review with findings now asks before it is sent.** Send to dashboard, or
+  wait — fix what was found, commit again, and the newer commit supersedes the
+  held one. A report cannot be withdrawn once filed, so the choice belongs to
+  the developer.
+- **A clean review is sent without asking.** There is nothing to reconsider, and
+  a dialog on every clean commit is how a prompt stops being read.
+- **Holding is not discarding.** The report is kept and can be sent from the
+  panel afterwards, the status bar says it is held rather than showing all is
+  well, and the local copy under `.cr-track/` is written either way — it is the
+  durable record and it never leaves the machine.
+- Dismissing the prompt holds rather than sends. Closing a notification is not
+  consent to publish.
+- `crTrack.confirmBeforeSending` turns the prompt off for teams that would
+  rather every review reported automatically.
+
+Fixes for defects CR-Track found in its own last eight releases:
+
+- **A staged review stranded the previous commit's review**, so fixes ticked for
+  it were never reported and it stayed unscored for ever.
+- **`checkToken` called a 404, 502 or 500 a working token.** Only a status
+  proving the request reached validation counts now.
+- **The debounce timer outlived the session**, firing against a torn-down window.
+- **Two doctor branches were unreachable** — merged stderr made an empty
+  repository report "it has commits (fatal: ambiguous argument…)" and a broken
+  Claude binary report its error text as a version.
+- **The whole-file override quoted a rule the prompt does not contain**, leaving
+  the model to guess which rule was carved out.
+- The retired ingest endpoint answers GET with the migration pointer again, and
+  handles preflight.
+- The ruleset no longer claims `assertive` reports everything; the confidence
+  floor applies at every profile.
+
+Test defects, which matter because a test that cannot fail is worse than none:
+
+- `live.js` read back through two deleted endpoints, so it could only fail.
+- `send-head.js` exited 0 whether the report was delivered, rejected or never
+  finished.
+- Two harnesses had no rejection handler, leaving the vscode stub installed.
+- The annotations check passed on a prompt that disables annotations.
+- Assertions that formatted or dereferenced a value before the check meant to
+  report it missing.
+
 ## 0.11.0
 
 Review your work before it becomes a commit.

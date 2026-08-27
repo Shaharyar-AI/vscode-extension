@@ -156,8 +156,12 @@ function findRealClaude() {
 }
 
 /** Activate the extension against a repo. Does NOT wait for a review. */
-async function boot(repo, { answers, store } = {}) {
+async function boot(repo, { answers, store, confirmSends = false } = {}) {
   const { vscode, state } = makeStub({ repo, answers });
+  // Off unless a test is specifically about the prompt. Every other delivery
+  // test is about what gets sent, not about being asked first, and leaving it
+  // on would turn each of them into a test of the dialog.
+  state.config.set("crTrack.confirmBeforeSending", confirmSends);
   const restore = install(vscode);
   const ext = loadExtension(BUNDLE);
   const context = makeContext(EXT_DIR, store);
@@ -1243,6 +1247,140 @@ export async function transfer(from: string, to: string, amount: any) {
     server.close();
   }
 
+  section("6j. Choosing which repositories to review");
+  {
+    const repo = makeRepo("optin");
+
+    // ---- asked on first sight -------------------------------------------
+    const first = await boot(repo, { answers: { info: ["Not this one"] } });
+    check("A repository it has not seen before is asked about",
+      first.state.messages.some((m) => /Review commits in .* with CR-Track\?/.test(m.message)),
+      "asked",
+      "it started reviewing a repository without asking");
+    check("...and answering no leaves it off",
+      /off here/.test(first.state.statusText),
+      first.state.statusText,
+      "it does not say it was turned off here, so Diagnose finds nothing wrong");
+    check("...with no commit watcher installed",
+      !first.state.fileWatchers.some((w) => /logs\/HEAD/.test(w.pattern)),
+      "not watching",
+      "commits will still be reviewed in a repository that was turned off");
+    const saved = first.context.store;
+    first.restore();
+
+    // ---- not asked twice -------------------------------------------------
+    const second = await boot(repo, { store: saved });
+    check("The answer is remembered rather than asked again",
+      !second.state.messages.some((m) => /Review commits in/.test(m.message)),
+      "not asked twice",
+      "it asks on every window open, which is how a tool gets uninstalled");
+    second.restore();
+
+    // ---- turning it back on ----------------------------------------------
+    const third = await boot(repo, { store: saved, answers: { info: ["ok"] } });
+    await run(third.state, "crTrack.toggleRepo");
+    await waitFor(() => third.state.fileWatchers.some((w) => /logs\/HEAD/.test(w.pattern)), 60);
+    check("The button turns it back on for this repository",
+      third.state.fileWatchers.some((w) => /logs\/HEAD/.test(w.pattern)),
+      "watching again",
+      "turning it back on did not resume watching for commits");
+
+    // ---- and off again, immediately --------------------------------------
+    const watchersBefore = third.state.fileWatchers.filter((w) =>
+      /logs\/HEAD/.test(w.pattern),
+    ).length;
+    await run(third.state, "crTrack.toggleRepo");
+    check("...and off again without waiting for a reload",
+      /off here/.test(third.state.statusText), third.state.statusText,
+      "it kept reviewing until the window was reloaded");
+    check("...disposing the commit watcher rather than leaving it armed",
+      third.state.fileWatchers.filter((w) => /logs\/HEAD/.test(w.pattern) && !w.disposed)
+        .length < watchersBefore,
+      "watcher disposed",
+      "the next commit would still be reviewed after being turned off");
+    third.restore();
+
+    // ---- dismissing is not an answer -------------------------------------
+    const other = makeRepo("dismissed");
+    const fourth = await boot(other, { answers: { info: [] } });
+    check("Dismissing the question records nothing",
+      !JSON.stringify([...fourth.context.store.keys()]).includes("repoChoices") ||
+        !JSON.stringify(fourth.context.store.get("crTrack.repoChoices") || {}).includes("dismissed"),
+      "no decision stored",
+      "closing a notification silently decided for the developer");
+    fourth.restore();
+  }
+
+  section("6k. Asking before anything is recorded");
+  if (FAST) {
+    skipped("Confirm before sending", "needs a real review to have findings");
+  } else {
+    const http = require("node:http");
+    const posted = [];
+    const server = http.createServer((req, res) => {
+      let b = ""; req.on("data", (c) => (b += c));
+      req.on("end", () => { posted.push(b); res.writeHead(200); res.end('{"ok":true}'); });
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const endpoint = `http://127.0.0.1:${server.address().port}/api/ingest`;
+
+    const repo = makeRepo("confirm");
+    fs.writeFileSync(path.join(repo, ".cr-track.yaml"), `endpoint: ${endpoint}
+`);
+    git(repo, "add", "-A");
+    git(repo, "commit", "-qm", "point at the test server");
+
+    // "Wait" is the answer, so nothing should reach the dashboard.
+    const { state, restore } = await boot(repo, {
+      confirmSends: true,
+      answers: { warning: ["Wait — I'll fix first"] },
+    });
+    commit(repo, "add transfer", { "src/payments.ts": BAD_SOURCE });
+    await fireCommitWatcher(state);
+    await waitFor(() => /holding the report/.test(logText(state)), 300);
+
+    check("The developer is asked before findings are recorded",
+      state.messages.some((m) => /found \d+ finding\(s\) in .* —/.test(m.message)),
+      "asked",
+      "findings were filed without the developer being told");
+    await sleep(2_000);
+    check("...and answering wait sends nothing",
+      posted.length === 0, `${posted.length} POST(s)`,
+      "the report went to the dashboard after the developer asked it not to");
+    check("...with the status bar saying it is held, not that all is well",
+      /held/.test(state.statusText), state.statusText,
+      "a deliberate hold looks identical to a sent report");
+
+    // Held, not discarded: the developer must be able to change their mind.
+    state.messages.length = 0;
+    await run(state, "crTrack.sendHeld");
+    await waitFor(() => posted.length > 0, 60);
+    check("A held report can still be sent afterwards",
+      posted.length === 1, `${posted.length} POST(s)`,
+      "choosing wait threw the report away, so it could never be sent");
+
+    // A newer commit supersedes a hold: that is what holding was for.
+    const { state: s2, restore: r2 } = await boot(repo, {
+      confirmSends: true,
+      answers: { warning: ["Wait — I'll fix first"] },
+    });
+    posted.length = 0;
+    commit(repo, "still bad", { "src/payments.ts": BAD_SOURCE.replace("amount", "value") });
+    await fireCommitWatcher(s2);
+    await waitFor(() => /holding the report/.test(logText(s2)), 300);
+    s2.logLines.length = 0;
+    commit(repo, "fixed now", { "src/payments.ts": "export const rate = 1;\n" });
+    await fireCommitWatcher(s2);
+    await waitFor(() => /Discarding the held report|finding\(s\) in|skipping/.test(logText(s2)), 300);
+    check("A newer commit supersedes a held report",
+      /Discarding the held report/.test(logText(s2)), "superseded",
+      "the old findings would still be filed after the developer fixed them");
+    r2();
+
+    restore();
+    server.close();
+  }
+
   section("7. The report reaches the dashboard");
   {
     const received = [];
@@ -1381,20 +1519,11 @@ export async function transfer(from: string, to: string, amount: any) {
       try {
         // Filter by name first: without it the query matches the very
         // PowerShell process running it, whose command line contains the flag.
-        // Match on --no-session-persistence, which every process the engine
-        // spawns carries. The old filter looked for --append-system-prompt-file,
-        // which only the review pass uses — the fix-verification pass was
-        // invisible to this check, so a leak there would never have been seen.
-        const script =
-          "Get-CimInstance Win32_Process | " +
-          "Where-Object { $_.Name -like 'claude*' -and " +
-          "$_.CommandLine -like '*no-session-persistence*' } | " +
-          "Select-Object -ExpandProperty ProcessId";
-        const count = () =>
-          execFileSync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf8" })
-            .split(/\r?\n/)
-            .map((line) => parseInt(line.trim(), 10))
-            .filter((pid) => Number.isFinite(pid));
+        // One definition of what an engine-spawned Claude looks like. Two
+        // copies would have to be retuned together, and the baseline
+        // subtraction below only means anything while both describe the
+        // same set of processes.
+        const count = engineClaudePids;
         // A killed process lingers in Win32_Process for a moment, so sampling
         // once turns teardown timing into an intermittent failure. Wait for it
         // to settle; only a process still alive after that is really orphaned.
@@ -1515,11 +1644,20 @@ export async function transfer(from: string, to: string, amount: any) {
     // is introduced by a whole-file review, so unless that prompt overrides the
     // rule explicitly, a whole-file review correctly reports nothing at all.
     const { USER_PROMPT_FILES } = require(path.join(EXT_DIR, "..", "engine", "dist", "prompt.js"));
-    check("Whole-file review overrides the diff-scope rule",
-      /what this file contains/.test(USER_PROMPT_FILES) &&
-        /already present in these files are in scope/.test(USER_PROMPT_FILES),
-      "scope overridden for whole-file mode",
-      "the out-of-scope rule would suppress every finding in a whole-file review");
+    // Assert the anchors, not one phrasing of them. Quoting a rule the system
+    // prompt does not actually contain leaves the model guessing which rule is
+    // being carved out, which is the ambiguity this exception exists to remove.
+    const anchors = [
+      "Anything this diff did not introduce",
+      "reviewing the file instead of the change",
+    ];
+    check("Whole-file review overrides both rules that would empty it",
+      anchors.every((a) => USER_PROMPT_FILES.includes(a)),
+      "both suppressing rules named",
+      "a suppressing rule is left unaddressed, so a whole-file review reports nothing");
+    check("...quoting wording the system prompt actually uses",
+      anchors.every((a) => sp.includes(a)), "anchors match the prompt",
+      "the override quotes a phrase that appears nowhere in the system prompt");
     check("...while still not commenting on the transport",
       /Do not[\s\S]*report that files are new/.test(USER_PROMPT_FILES), "transport ignored");
 

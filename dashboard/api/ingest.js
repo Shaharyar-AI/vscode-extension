@@ -19,10 +19,34 @@
 const MOVED_TO = "https://kpi.ikonicsolution.com/api/ingest";
 
 module.exports = async (req, res) => {
+  // The one audience this route still has is someone on an old install working
+  // out where their reports went. Answering a pasted URL with "method not
+  // allowed" tells them nothing; the pointer is the whole point of keeping it.
+  if (req.method === "GET" || req.method === "HEAD") {
+    return res.status(200).json({
+      ok: true,
+      deprecated: true,
+      message:
+        "This endpoint no longer records reviews. Update CR-Track — reports now go to the team tracker.",
+      movedTo: MOVED_TO,
+    });
+  }
+
+  // The page that posted here from a browser is gone, so no preflight is
+  // expected. Answering OPTIONS anyway costs one branch and avoids the failure
+  // this shim exists to prevent, should any browser sender still exist.
+  if (req.method === "OPTIONS") {
+    res.setHeader("access-control-allow-origin", "*");
+    res.setHeader("access-control-allow-methods", "POST, GET, OPTIONS");
+    res.setHeader("access-control-allow-headers", "content-type, authorization");
+    return res.status(204).end();
+  }
+
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+    res.setHeader("Allow", "POST, GET, OPTIONS");
     return res.status(405).json({ ok: false, error: "method not allowed" });
   }
+  res.setHeader("access-control-allow-origin", "*");
 
   // The body is read and discarded. Draining it matters: leaving a request
   // stream unread can hold the connection open until the client times out,

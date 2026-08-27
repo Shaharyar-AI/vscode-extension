@@ -49,11 +49,11 @@ export async function transfer(from: string, to: string, amount: any) {
     process.exit(2);
   }
 
-  const before = await fetch(DASHBOARD + "/api/reviews?limit=500", { cache: "no-store" })
-    .then((r) => r.json())
-    .catch(() => ({ reviews: [] }));
-  const seen = new Set((before.reviews || []).map((r) => r.key));
-  console.log("  " + seen.size + " review(s) already on the dashboard\n");
+  // The listing endpoints this test used to read back through were removed
+  // with the dashboard page they served. What this host can still prove is
+  // that the extension reviews a real commit and posts it; whether a review
+  // is stored and rendered is now the team tracker's business, and
+  // test/live-theirs.js is what exercises that.
 
   const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "crtrack-live-"));
   const repo = path.join(TMP, "live-repo");
@@ -70,7 +70,11 @@ export async function transfer(from: string, to: string, amount: any) {
 
   console.log("── Booting the extension on a real repository");
   const { vscode, state } = makeStub({ repo });
-  const restore = install(vscode);
+  // Nobody is present to answer the send prompt in an automated run, and an
+// unanswered prompt holds the report — which is the correct behaviour and the
+// wrong thing to test here.
+state.config.set("crTrack.confirmBeforeSending", false);
+const restore = install(vscode);
   const ext = loadExtension(BUNDLE);
   await ext.activate(makeContext(EXT_DIR));
   await sleep(1500);
@@ -120,43 +124,14 @@ export async function transfer(from: string, to: string, amount: any) {
   const localPath = path.join(repo, ".cr-track", "last-review.json");
   check("A local copy exists", fs.existsSync(localPath), ".cr-track/last-review.json");
 
-  console.log("\n── Reading it back off the dashboard");
-  await sleep(2000);
-  let found = null;
-  for (let i = 0; i < 10 && !found; i++) {
-    const now = await fetch(DASHBOARD + "/api/reviews?limit=500", { cache: "no-store" })
-      .then((r) => r.json())
-      .catch(() => ({ reviews: [] }));
-    found = (now.reviews || []).find((r) => !seen.has(r.key) && r.commitSha === sha);
-    if (!found) await sleep(2000);
-  }
-
-  check("The review appears on the dashboard", !!found,
-    found ? found.key : "", "the dashboard never received it");
-
-  if (found) {
-    check("...attributed to the right developer",
-      found.developerEmail === "live-test@ikonicdev.com", found.developerEmail);
-    check("...against the right commit", found.commitSha === sha, found.commitShort);
-    check("...with the commit message", found.commitMessage === "Add the transfer endpoint",
-      found.commitMessage);
-    check("...with the branch", found.branch === "main", found.branch);
-    check("...with the file count", found.filesChanged >= 1, `${found.filesChanged} file(s)`);
-    check("...with findings counted",
-      found.findingsTotal > 0, `${found.findingsTotal} finding(s)`,
-      "the dashboard recorded zero findings for code that has several");
-    check("...marked as a committed review", found.mode === "committed", found.mode);
-    check("...identifying the extension", found.surface === "vscode-extension", found.surface);
-
-    const detail = await fetch(DASHBOARD + "/api/review?key=" + encodeURIComponent(found.key))
-      .then((r) => r.json());
-    check("The full report is readable", detail.ok === true, found.key);
-    const first = detail.report?.findings?.[0];
-    check("...with a finding that names a file and a line",
-      !!first?.file && Number.isFinite(first?.lineStart), first ? `${first.file}:${first.lineStart}` : "");
-    check("...and carries advice the developer can act on",
-      (first?.suggestion || "").length > 15, (first?.suggestion || "").slice(0, 70));
-  }
+  // Reading the review back was how this test used to finish, through
+  // /api/reviews and /api/review. Both routes were removed along with the
+  // dashboard page they served, so those assertions could only ever fail
+  // from here on. Storage and rendering are the team tracker's job now, and
+  // test/live-theirs.js proves that path against the real endpoint with a
+  // real token.
+  console.log("\n── Reading it back");
+  console.log("  skipped — moved to the team tracker (test/live-theirs.js)");
 
   console.log("\n── Teardown");
   ext.deactivate();
@@ -166,7 +141,7 @@ export async function transfer(from: string, to: string, amount: any) {
     try {
       const out = execFileSync("powershell", ["-NoProfile", "-Command",
         "@(Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'claude*' -and " +
-        "$_.CommandLine -like '*append-system-prompt-file*' }).Count"], { encoding: "utf8" });
+        "$_.CommandLine -like '*no-session-persistence*' }).Count"], { encoding: "utf8" });
       return (parseInt(out.trim(), 10) || 0) === 0;
     } catch { return true; }
   })(), "none");

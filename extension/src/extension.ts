@@ -10,7 +10,16 @@
  * way for the thing to be broken on someone else's machine.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as vscode from "vscode";
@@ -49,7 +58,7 @@ import { buildReport } from "@engine/report";
 import { runReview } from "@engine/review";
 import { checkToken, deliver, flushQueue } from "@engine/telemetry";
 import type { Annotation, DiffStats, Finding, RepoContext } from "@engine/types";
-import type { ReportInput } from "@engine/report";
+import type { Report, ReportInput } from "@engine/report";
 
 let session: Session | undefined;
 
@@ -100,6 +109,17 @@ class Session implements vscode.Disposable {
 
   /** Collapses a burst of ticks into one push. */
   private repushTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * A report the developer asked to hold rather than send.
+   *
+   * Kept in memory only. Surviving a reload would mean a report sitting on disk
+   * that the developer has forgotten deciding about, and the commit it
+   * describes is still in history — the next review of that work supersedes it.
+   */
+  private held:
+    | { repoRoot: string; report: Report; shortSha: string; findings: number }
+    | undefined;
 
   /** Supplied by activate(); Session should not know where secrets live. */
   ingestToken: (() => Promise<string | undefined>) | undefined;
@@ -394,9 +414,12 @@ class Session implements vscode.Disposable {
         return;
       }
 
-      // Shown like any other review, but nothing is pushed and no review is
-      // recorded, so ticking a row here only clears it from the panel.
-      this.pushed = undefined;
+      // Close the previous commit's review out first. Clearing `pushed` on its
+      // own would strand it: scheduleRepush and the next commit's
+      // finalizePrevious both return early when there is nothing pushed, so any
+      // fixes the developer had ticked for that commit would never be reported
+      // and its review would sit unscored for ever.
+      this.finalizePrevious();
       this.display(result.findings, repoRoot, `staged-${Date.now()}`, [], [], false);
       this.status.reviewed(result.findings.length, "staged");
       log.info(
@@ -429,6 +452,17 @@ class Session implements vscode.Disposable {
     // review nobody touched stays unfinalized for ever and is never scored —
     // which is exactly how ignoring every finding becomes invisible.
     this.finalizePrevious();
+
+    // A held report is superseded by the commit that follows it. Holding meant
+    // "let me fix this first"; this is that fix arriving, and filing the old
+    // findings now would record problems the developer has already dealt with.
+    if (this.held) {
+      log.info(
+        `Discarding the held report for ${this.held.shortSha} — a newer commit supersedes it`,
+      );
+      this.held = undefined;
+      void vscode.commands.executeCommand("setContext", "crTrack.hasHeld", false);
+    }
 
     this.reviewing = true;
     const triggeredAt = new Date();
@@ -614,6 +648,97 @@ class Session implements vscode.Disposable {
     this.pushed = undefined;
   }
 
+  /**
+   * Ask the developer whether this review should be recorded.
+   *
+   * A report cannot be withdrawn once filed, and the counts in it become part
+   * of how their work is measured — so the choice to send belongs to them.
+   * Answering "wait" holds the report rather than discarding it: a held report
+   * that quietly disappeared would be indistinguishable from one that failed to
+   * send, and the developer would have no way to change their mind.
+   *
+   * A clean review is sent without asking. There is nothing to fix and nothing
+   * to reconsider, and a dialog on every clean commit is how a prompt stops
+   * being read.
+   */
+  private async confirmSend(
+    repoRoot: string,
+    commit: CommitInfo,
+    report: Report,
+    findings: Finding[],
+  ): Promise<boolean> {
+    if (!this.settings(repoRoot).confirmBeforeSending) return true;
+    if (!findings.length) return true;
+
+    const counts = new Map<string, number>();
+    for (const f of findings) counts.set(f.severity, (counts.get(f.severity) ?? 0) + 1);
+    const summary = ["blocking", "important", "nit", "suggestion"]
+      .filter((sev) => counts.has(sev))
+      .map((sev) => `${counts.get(sev)} ${sev}`)
+      .join(", ");
+
+    const choice = await vscode.window.showWarningMessage(
+      `CR-Track found ${findings.length} finding(s) in ${commit.shortSha} — ${summary}.`,
+      { modal: false, detail: "Sending records them against you on the dashboard." },
+      "Send to dashboard",
+      "Wait — I'll fix first",
+      "Show findings",
+    );
+
+    if (choice === "Show findings") {
+      await vscode.commands.executeCommand("crTrack.findings.focus");
+      // Asked again rather than decided by a detour: opening the panel is not
+      // an answer to the question.
+      return this.confirmSend(repoRoot, commit, report, findings);
+    }
+
+    if (choice === "Send to dashboard") {
+      this.held = undefined;
+      return true;
+    }
+
+    // "Wait", or dismissed. Dismissing is not consent to send.
+    this.held = { repoRoot, report, shortSha: commit.shortSha, findings: findings.length };
+    this.status.held(commit.shortSha, findings.length);
+    log.info(
+      `${commit.shortSha}: holding the report at the developer's request — ` +
+        `${findings.length} finding(s) not sent`,
+    );
+    void vscode.window.showInformationMessage(
+      `Holding ${commit.shortSha}. Fix and commit again, or send it from the Findings panel.`,
+    );
+    return false;
+  }
+
+  /** Send a report the developer previously chose to hold. */
+  async sendHeld(): Promise<void> {
+    const held = this.held;
+    if (!held) {
+      void vscode.window.showInformationMessage("CR-Track: nothing is being held.");
+      return;
+    }
+    const endpoint = readEndpoint(held.repoRoot);
+    if (!endpoint) return;
+    const token = await this.ingestToken?.();
+    const result = await deliver(held.repoRoot, held.report, {
+      endpoint,
+      ...(token ? { token } : {}),
+    });
+    if (result.permanentFailure) {
+      reportRejection(result, endpoint);
+      return;
+    }
+    this.held = undefined;
+    void vscode.commands.executeCommand("setContext", "crTrack.hasHeld", false);
+    log.info(`Sent the held report for ${held.shortSha} (${result.status ?? "queued"})`);
+    void vscode.window.showInformationMessage(`CR-Track: sent ${held.shortSha} to the dashboard.`);
+  }
+
+  /** Whether a report is waiting on the developer. */
+  heldSummary(): { shortSha: string; findings: number } | undefined {
+    return this.held ? { shortSha: this.held.shortSha, findings: this.held.findings } : undefined;
+  }
+
   private async report(
     repoRoot: string,
     commit: CommitInfo,
@@ -662,6 +787,20 @@ class Session implements vscode.Disposable {
       if (redactionHits.length) log.info(`Redacted: ${redactionHits.join(", ")}`);
 
       const endpoint = readEndpoint(repoRoot);
+
+      // Ask before recording anything against the developer. They may want to
+      // fix what was found and recommit, and a report already filed cannot be
+      // withdrawn.
+      //
+      // The local copy is written either way. It is the durable record and it
+      // never leaves the machine; withholding it because the developer declined
+      // to publish would lose the review entirely, including from the panel
+      // after a reload.
+      if (endpoint && !(await this.confirmSend(repoRoot, commit, report, findings))) {
+        await deliver(repoRoot, report, {});
+        return;
+      }
+
       const token = await this.ingestToken?.();
       const result = await deliver(repoRoot, report, {
         ...(endpoint ? { endpoint } : {}),
@@ -700,6 +839,12 @@ class Session implements vscode.Disposable {
   }
 
   dispose(): void {
+    // A tick within the debounce window would otherwise fire after the window
+    // has gone, pushing a report for a review the developer has already left.
+    if (this.repushTimer) {
+      clearTimeout(this.repushTimer);
+      this.repushTimer = undefined;
+    }
     for (const d of this.disposables) d.dispose();
   }
 }
@@ -930,6 +1075,98 @@ function childRepos(parent: string): string[] {
   }
 }
 
+/**
+ * Whether the developer wants CR-Track working in a given repository.
+ *
+ * Kept per repository path in global state rather than in workspace state or a
+ * setting. Global state because the answer belongs to the person, not to the
+ * window: reopening the same folder should not ask again, and opening it in a
+ * second window should not ask a second time. Not a setting, because a setting
+ * written into .vscode/settings.json is committed and would silently switch the
+ * tool off for everyone else on the team.
+ */
+const REPO_CHOICES = "crTrack.repoChoices";
+
+type RepoChoice = "on" | "off";
+
+function repoChoices(context: vscode.ExtensionContext): Record<string, RepoChoice> {
+  return context.globalState.get<Record<string, RepoChoice>>(REPO_CHOICES) ?? {};
+}
+
+function repoChoice(context: vscode.ExtensionContext, root: string): RepoChoice | undefined {
+  return repoChoices(context)[normalizeRoot(root)];
+}
+
+async function setRepoChoice(
+  context: vscode.ExtensionContext,
+  root: string,
+  choice: RepoChoice | undefined,
+): Promise<void> {
+  const all = { ...repoChoices(context) };
+  if (choice) all[normalizeRoot(root)] = choice;
+  else delete all[normalizeRoot(root)];
+  await context.globalState.update(REPO_CHOICES, all);
+}
+
+/**
+ * One spelling per repository.
+ *
+ * The same folder arrives spelled differently depending on where it came from:
+ * the workspace folder gives Windows' 8.3 short form (DEVELO~1) while git gives
+ * the long one, and case and trailing slashes vary on top of that. Storing the
+ * choice under whichever spelling happened to be in hand meant a developer
+ * could turn CR-Track off and have the button fail to turn it back on, because
+ * it was reading a key nothing had ever written.
+ *
+ * realpath resolves the short form; it also follows symlinks, which is the same
+ * problem in a different costume.
+ */
+function normalizeRoot(root: string): string {
+  let resolved = root;
+  try {
+    resolved = realpathSync.native(root);
+  } catch {
+    // The path may not exist yet, or be on a filesystem that cannot answer.
+    // Falling back to the literal is worse than resolving, but better than
+    // throwing out of a lookup.
+  }
+  return resolved
+    .replace(/[\\/]+$/, "")
+    .replace(/\\/g, "/")
+    .toLowerCase();
+}
+
+/**
+ * Ask, once, whether this repository should be reviewed.
+ *
+ * Only asked when there is no answer on record. Asking on every activation
+ * would be a dialog on every window open, which is how a tool gets uninstalled.
+ */
+async function askAboutRepo(
+  context: vscode.ExtensionContext,
+  root: string,
+  name: string,
+): Promise<RepoChoice> {
+  const known = repoChoice(context, root);
+  if (known) return known;
+
+  const answer = await vscode.window.showInformationMessage(
+    `Review commits in ${name} with CR-Track?`,
+    { modal: false },
+    "Yes, review this repo",
+    "Not this one",
+  );
+  // Dismissed rather than answered: treat as yes for now but record nothing, so
+  // the question is asked again next time instead of being decided by a stray
+  // click on the notification's close button.
+  if (!answer) return "on";
+
+  const choice: RepoChoice = answer === "Yes, review this repo" ? "on" : "off";
+  await setRepoChoice(context, root, choice);
+  log.info(`${name}: ${choice === "on" ? "enabled" : "disabled"} by the developer`);
+  return choice;
+}
+
 async function start(context: vscode.ExtensionContext, status: StatusBar): Promise<void> {
   if (starting) return;
   starting = true;
@@ -1018,6 +1255,16 @@ async function startInner(context: vscode.ExtensionContext, status: StatusBar): 
   if (!settings(primary.root).enabled) {
     log.info("Disabled via crTrack.enabled");
     status.dormant("disabled in settings");
+    disarmRecovery();
+    return;
+  }
+
+  // Asked once per repository, then remembered. A developer opening a client's
+  // repository, or a scratch clone, should not have its commits reviewed and
+  // recorded against them just because the extension is installed.
+  if ((await askAboutRepo(context, primary.root, primary.name)) === "off") {
+    log.info(`${primary.name}: off for this repository`);
+    status.dormant(`off in ${primary.name}`);
     disarmRecovery();
     return;
   }
@@ -1249,6 +1496,47 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     const node = arg as { kind?: string; finding?: Finding } | undefined;
     return node?.kind === "finding" ? node.finding : undefined;
   };
+
+  register("crTrack.sendHeld", async () => {
+    if (!session) {
+      void vscode.window.showInformationMessage("CR-Track: nothing is being held.");
+      return;
+    }
+    await session.sendHeld();
+    await vscode.commands.executeCommand("setContext", "crTrack.hasHeld", !!session.heldSummary());
+  });
+
+  register("crTrack.toggleRepo", async () => {
+    const root =
+      session?.tree.currentRepoRoot() ||
+      session?.repos[0]?.root ||
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!root) {
+      void vscode.window.showWarningMessage("CR-Track: no folder is open.");
+      return;
+    }
+    const name = root.split(/[\/]/).filter(Boolean).pop() ?? root;
+    const now = repoChoice(context, root) ?? "on";
+
+    if (now === "on") {
+      await setRepoChoice(context, root, "off");
+      log.info(`${name}: turned off for this repository`);
+      // Stop immediately rather than at the next window: the developer turned
+      // it off because they do not want the next commit reviewed.
+      session?.dispose();
+      session = undefined;
+      status.dormant(`off in ${name}`);
+      void vscode.window.showInformationMessage(
+        `CR-Track is off in ${name}. Commits here will not be reviewed or recorded.`,
+      );
+      return;
+    }
+
+    await setRepoChoice(context, root, "on");
+    log.info(`${name}: turned on for this repository`);
+    await start(context, status);
+    void vscode.window.showInformationMessage(`CR-Track is on in ${name}.`);
+  });
 
   register("crTrack.reviewStaged", async () => {
     if (!session) await start(context, status);

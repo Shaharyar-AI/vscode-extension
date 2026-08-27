@@ -1,18 +1,26 @@
 {
   "schemaVersion": "2.1",
-  "finalized": true,
+  "finalized": false,
   "source": "claude-code-skill",
   "ruleset": "coderabbit-style@2.0",
   "review": {
-    "id": "fd681497-520f-4709-8649-53cc4ba9a719",
-    "triggeredAt": "2026-08-26T10:26:08.739Z",
-    "completedAt": "2026-08-26T10:26:36.818Z",
-    "durationMs": 14269,
+    "id": "c4cca09d-cc69-49ae-9233-6109dba3c370",
+    "triggeredAt": "2026-08-27T11:59:25.123Z",
+    "completedAt": "2026-08-27T12:01:08.178Z",
+    "durationMs": 89156,
     "status": "completed",
     "mode": "committed",
     "model": "claude-opus-5",
     "effort": "medium",
-    "secondPass": false
+    "secondPass": false,
+    "commit": {
+      "sha": "73e57c2c1b4715dba3d8c377b2d5add75b78df97",
+      "shortSha": "73e57c2",
+      "message": "Review what is staged, before it becomes a commit (0.11.0)",
+      "authorName": "Shaharyar-AI",
+      "authorEmail": "shaharyar_shabbir@ikonicsolution.com",
+      "authoredAt": "2026-08-27T16:59:23+05:00"
+    }
   },
   "developer": {
     "name": "Shaharyar-AI",
@@ -24,7 +32,7 @@
     "remote": "https://github.com/ikonic-git-admin/claude-skills.git",
     "branch": "main",
     "baseBranch": "main",
-    "commitBefore": "03d7c2a",
+    "commitBefore": "73e57c2",
     "isDirty": false,
     "host": "github.com",
     "owner": "ikonic-git-admin",
@@ -35,36 +43,29 @@
   },
   "diffStats": {
     "filesChanged": 10,
-    "linesAdded": 174,
-    "linesRemoved": 102,
+    "linesAdded": 199,
+    "linesRemoved": 284,
     "files": [
       {
         "path": ".cr-track/last-review.json",
         "language": "JSON",
-        "linesAdded": 36,
-        "linesRemoved": 94,
+        "linesAdded": 2,
+        "linesRemoved": 10,
         "changeType": "modified"
       },
       {
         "path": ".[REDACTED].json",
         "language": "JSON",
-        "linesAdded": 119,
-        "linesRemoved": 0,
-        "changeType": "added"
+        "linesAdded": 0,
+        "linesRemoved": 119,
+        "changeType": "deleted"
       },
       {
-        "path": "dashboard/README.md",
-        "language": "Markdown",
-        "linesAdded": 1,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "dashboard/api/ingest.js",
-        "language": "JavaScript",
-        "linesAdded": 1,
-        "linesRemoved": 1,
-        "changeType": "modified"
+        "path": ".[REDACTED].json",
+        "language": "JSON",
+        "linesAdded": 0,
+        "linesRemoved": 147,
+        "changeType": "deleted"
       },
       {
         "path": "dashboard/public/version.txt",
@@ -83,22 +84,29 @@
       {
         "path": "extension/CHANGELOG.md",
         "language": "Markdown",
-        "linesAdded": 11,
+        "linesAdded": 14,
         "linesRemoved": 0,
         "changeType": "modified"
       },
       {
         "path": "extension/package.json",
         "language": "JSON",
-        "linesAdded": 2,
-        "linesRemoved": 2,
+        "linesAdded": 16,
+        "linesRemoved": 5,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/src/extension.ts",
+        "language": "TypeScript",
+        "linesAdded": 98,
+        "linesRemoved": 0,
         "changeType": "modified"
       },
       {
         "path": "extension/test/qa.js",
         "language": "JavaScript",
-        "linesAdded": 1,
-        "linesRemoved": 1,
+        "linesAdded": 66,
+        "linesRemoved": 0,
         "changeType": "modified"
       },
       {
@@ -110,26 +118,46 @@
       }
     ]
   },
-  "findings": [],
+  "findings": [
+    {
+      "id": "f1",
+      "file": "extension/src/extension.ts",
+      "lineStart": 398,
+      "lineEnd": 400,
+      "severity": "important",
+      "category": "correctness",
+      "title": "Staged review discards the previous review without finalizing it",
+      "description": "Clearing `this.pushed` here drops the last commit's pushed review outright, unlike `reviewCommit`, which calls `finalizePrevious()` (line 431) to send the final applied/total counts first. After running a staged review, that commit's review is never finalized: `scheduleRepush` and the next commit's `finalizePrevious()` both return early at `if (!this.pushed) return;`, so any fixes the developer ticked off for it are never reported and the review stays unscored on the dashboard.",
+      "suggestion": "Consider calling `this.finalizePrevious()` instead — it pushes the final outcome and then clears `this.pushed`, so the staged review still pushes nothing of its own.",
+      "confidence": 0.85,
+      "hadPatch": true,
+      "status": "proposed",
+      "accepted": false,
+      "dismissReason": null,
+      "detectedBy": "llm"
+    }
+  ],
   "changes": [],
   "summary": {
-    "findingsTotal": 0,
+    "findingsTotal": 1,
     "bySeverity": {
       "blocking": 0,
-      "important": 0,
+      "important": 1,
       "nit": 0,
       "suggestion": 0
     },
-    "byCategory": {},
+    "byCategory": {
+      "correctness": 1
+    },
     "applied": 0,
     "dismissed": 0,
-    "outstanding": 0,
-    "patchesOffered": 0,
+    "outstanding": 1,
+    "patchesOffered": 1,
     "reviewerTimeSavedMin": 0
   },
   "client": {
     "surface": "vscode-extension",
-    "extensionVersion": "0.9.1",
+    "extensionVersion": "0.10.0",
     "cliVersion": "2.1.245",
     "host": "DESKTOP-NBRJDA2",
     "os": "win32",

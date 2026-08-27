@@ -59,6 +59,23 @@ export class StatusBar implements vscode.Disposable {
    * command that explains why — an inactive extension the user cannot act on is
    * the worst of both worlds.
    */
+  /**
+   * A report the developer chose not to send yet.
+   *
+   * Distinct from every other state: nothing is wrong, nothing is running, and
+   * the dashboard is missing this review only because they said so. Showing it
+   * as idle would make a deliberate hold indistinguishable from a sent report.
+   */
+  held(shortSha: string, findings: number): void {
+    this.item.text = `$(circle-outline) CR-Track ${findings} held`;
+    this.item.tooltip =
+      `${findings} finding(s) in ${shortSha} are not on the dashboard yet.
+` +
+      "Fix and commit again, or send it from the Findings panel.";
+    this.item.backgroundColor = undefined;
+    this.item.command = "crTrack.findings.focus";
+  }
+
   dormant(reason: string): void {
     // The reason goes in the *text*, not just the tooltip. "inactive" on its own
     // sends people round a disable/reload/enable loop that cannot possibly help,
@@ -85,6 +102,9 @@ function shortReason(reason: string): string {
   if (r.includes("no git repository")) return "not a git repo";
   if (r.includes("git")) return "git unavailable";
   if (r.includes("no folder")) return "no folder open";
+  // Distinct from "disabled": the developer chose this repository, and telling
+  // them it is "inactive" sends them to Diagnose, which will find nothing wrong.
+  if (r.startsWith("off in")) return "off here";
   if (r.includes("disabled")) return "disabled";
   if (r.includes("starting")) return "starting";
   return "inactive";

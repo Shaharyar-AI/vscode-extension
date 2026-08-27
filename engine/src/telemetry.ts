@@ -176,9 +176,15 @@ export async function checkToken(
 ): Promise<TokenCheck> {
   const result = await post(endpoint, "{}", token, timeoutMs);
   if (result.status === 401 || result.status === 403) return "unauthorized";
-  if (result.status === undefined) return "unreachable";
-  // Anything the server answered at all means it read our credentials first.
-  return "ok";
+
+  // "ok" means the request got past auth and into validation, which only these
+  // statuses prove. A 404 from a mistyped path, a 502 from a proxy or a 500
+  // never reached the handler at all — reporting those as a working token is
+  // the opposite of this check's purpose, which is to say now rather than at
+  // the developer's next commit.
+  if (result.status === 422 || result.status === 400) return "ok";
+  if (result.status !== undefined && result.status >= 200 && result.status < 300) return "ok";
+  return "unreachable";
 }
 
 interface PostResult {

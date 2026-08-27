@@ -100,8 +100,12 @@ function Test-CRTrack {
   if ($claude) {
     Show-Ok "$claude"
     Show-Note "found via $source"
+    # Invoke-Native merges stderr, so a binary that exists but cannot run
+    # returns its error text rather than nothing. Testing for non-empty would
+    # report "reports: <error text>" as a pass — exactly the case this section
+    # exists to catch.
     $ver = (Invoke-Native $claude @('--version')).Trim()
-    if ($ver) { Show-Ok "reports: $ver" }
+    if ($ver -match '\d+\.\d+') { Show-Ok "reports: $ver" }
     else { Show-Bad "it exists but did not answer --version"; Show-Note "Run it yourself: & '$claude' --version" }
     if ($source -eq "the Claude Code editor extension") {
       Show-Note "CR-Track 0.4.3+ searches this location. Older builds do not -"
@@ -121,8 +125,11 @@ function Test-CRTrack {
     $inside = (Invoke-Native $git @('rev-parse', '--is-inside-work-tree')).Trim() -eq 'true' 
     if ($inside) {
       Show-Ok "this folder is a git repository"
+      # Same merged stderr: in a repository with no commits this returns
+      # "fatal: ambiguous argument 'HEAD'...", which is truthy, so the
+      # no-commits-yet branch below could never fire.
       $head = (Invoke-Native $git @('rev-parse', '--short', 'HEAD')).Trim()
-      if ($head) { Show-Ok "it has commits ($head)" }
+      if ($head -match '^[0-9a-f]{4,40}$') { Show-Ok "it has commits ($head)" }
       else { Show-Warn "no commits yet - the first one will be reviewed" }
     } else {
       Show-Warn "you are not inside a git repository right now"

@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -116,6 +116,18 @@
         "title": "Review staged changes (before you commit)",
         "category": "CR-Track",
         "icon": "$(inspect)"
+      },
+      {
+        "command": "crTrack.toggleRepo",
+        "title": "Turn CR-Track on or off for this repository",
+        "category": "CR-Track",
+        "icon": "$(circle-slash)"
+      },
+      {
+        "command": "crTrack.sendHeld",
+        "title": "Send the held report to the dashboard",
+        "category": "CR-Track",
+        "icon": "$(cloud-upload)"
       }
     ],
     "viewsContainers": {
@@ -188,6 +200,16 @@
         {
           "command": "crTrack.reviewStaged",
           "when": "view == crTrack.findings",
+          "group": "navigation@0"
+        },
+        {
+          "command": "crTrack.toggleRepo",
+          "when": "view == crTrack.findings",
+          "group": "navigation@5"
+        },
+        {
+          "command": "crTrack.sendHeld",
+          "when": "view == crTrack.findings && crTrack.hasHeld",
           "group": "navigation@0"
         }
       ],
@@ -314,6 +336,11 @@
           "type": "string",
           "default": "https://cr-track-dashboard.vercel.app",
           "description": "Where the Update button downloads from. This is the host serving version.txt and cr-track-latest.vsix \u2014 not the dashboard reports are sent to. Teams serving the extension themselves should point this at their own origin."
+        },
+        "crTrack.confirmBeforeSending": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ask before a review is sent to the dashboard, so you can fix what was found and commit again first. A clean review is sent without asking. Turn this off to report every review automatically."
         }
       }
     }
