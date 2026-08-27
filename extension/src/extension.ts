@@ -477,20 +477,6 @@ class Session implements vscode.Disposable {
         return;
       }
 
-      // Only now is a held report superseded. Holding meant "let me fix this
-      // first", and this commit is that fix — but the skips above are not:
-      // discarding on a merge or a docs-only commit would drop the findings
-      // with no review taking their place, which is the one outcome the hold
-      // was never meant to produce.
-      if (this.held) {
-        log.info(
-          `Discarding the held report for ${this.held.shortSha} — ` +
-            `${commit.shortSha} supersedes it`,
-        );
-        this.held = undefined;
-        void vscode.commands.executeCommand("setContext", "crTrack.hasHeld", false);
-      }
-
       const diff = await commitDiff(
         repoRoot,
         sha,
@@ -521,6 +507,21 @@ class Session implements vscode.Disposable {
         log.warn(`Review failed: ${result.error}`);
         this.status.failed(result.error);
         return;
+      }
+
+      // Only here is a held report genuinely superseded: a review has run and
+      // produced findings that are about to replace it. Every earlier point
+      // still had an exit ahead of it — a merge, no source files, an empty
+      // diff, a failed review — and discarding at any of those drops the held
+      // findings with nothing taking their place. Holding is unrecoverable
+      // once cleared, so the discard belongs at the last possible moment.
+      if (this.held) {
+        log.info(
+          `Discarding the held report for ${this.held.shortSha} — ` +
+            `${commit.shortSha} supersedes it`,
+        );
+        this.held = undefined;
+        void vscode.commands.executeCommand("setContext", "crTrack.hasHeld", false);
       }
 
       // Half one: show the developer what could be better.

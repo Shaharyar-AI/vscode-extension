@@ -1391,6 +1391,17 @@ export async function transfer(from: string, to: string, amount: any) {
     s3.logLines.length = 0;
     commit(repo, "just docs", { "NOTES.md": "# notes\n" });
     await fireCommitWatcher(s3);
+    // A failed review is not the fix either. This is the third exit found
+    // between the discard and a replacement existing — merge, no source files,
+    // empty diff, failed review — so the check is written against the property
+    // rather than one more specific path: nothing may clear a hold unless
+    // findings took its place.
+    check("...and the hold survives every path that produces no findings",
+      !/Discarding the held report/.test(logText(s3)) ||
+        /finding\(s\) in \d+s/.test(logText(s3)),
+      "cleared only when replaced",
+      "a hold was dropped on a path where no review replaced it");
+
     check("A docs-only commit does not discard it",
       !/Discarding the held report/.test(logText(s3)),
       "still held",

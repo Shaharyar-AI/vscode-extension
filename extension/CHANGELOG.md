@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.2
+
+- A held report is cleared only once findings have actually replaced it. 0.12.1
+  moved the discard past the merge and no-source-files checks, but an empty diff
+  and a failed review still cleared it on the way out — and a hold cannot be
+  recovered once cleared. It now happens at the last possible moment, after the
+  review has succeeded.
+
 ## 0.12.1
 
 - A held report is no longer discarded by a commit that was never reviewed. The

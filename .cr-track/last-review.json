@@ -4,22 +4,22 @@
   "source": "claude-code-skill",
   "ruleset": "coderabbit-style@2.0",
   "review": {
-    "id": "8c51f275-b666-4ffd-9528-ff5675c7745a",
-    "triggeredAt": "2026-08-27T14:02:54.216Z",
-    "completedAt": "2026-08-27T14:04:39.040Z",
-    "durationMs": 75022,
+    "id": "ba30a174-8847-4cd0-82a6-1d3de93072bd",
+    "triggeredAt": "2026-08-27T15:46:02.130Z",
+    "completedAt": "2026-08-27T15:46:48.895Z",
+    "durationMs": 27316,
     "status": "completed",
     "mode": "committed",
     "model": "claude-opus-5",
     "effort": "medium",
     "secondPass": false,
     "commit": {
-      "sha": "f185a9a2ae7667be6c5f1dd878ea7de8712ceaf6",
-      "shortSha": "f185a9a",
-      "message": "Ask before recording a review, and fix what CR-Track found in its own work (0.12.0)",
+      "sha": "b5cfd94907ad1f10f84f652bf418f1de401dab6b",
+      "shortSha": "b5cfd94",
+      "message": "Only a reviewed commit supersedes a held report (0.12.1)",
       "authorName": "Shaharyar-AI",
       "authorEmail": "shaharyar_shabbir@ikonicsolution.com",
-      "authoredAt": "2026-08-27T19:02:52+05:00"
+      "authoredAt": "2026-08-27T20:46:00+05:00"
     }
   },
   "developer": {
@@ -32,158 +32,53 @@
     "remote": "https://github.com/ikonic-git-admin/claude-skills.git",
     "branch": "main",
     "baseBranch": "main",
-    "commitBefore": "f185a9a",
+    "commitBefore": "b5cfd94",
     "isDirty": false,
     "host": "github.com",
     "owner": "ikonic-git-admin",
     "repo": "ikonic-git-admin/claude-skills"
   },
   "project": {
-    "primaryLanguage": "JavaScript"
+    "primaryLanguage": "JSON"
   },
   "diffStats": {
-    "filesChanged": 20,
-    "linesAdded": 812,
-    "linesRemoved": 136,
+    "filesChanged": 5,
+    "linesAdded": 175,
+    "linesRemoved": 54,
     "files": [
       {
         "path": ".cr-track/last-review.json",
         "language": "JSON",
-        "linesAdded": 66,
-        "linesRemoved": 38,
-        "changeType": "modified"
-      },
-      {
-        "path": "dashboard/api/ingest.js",
-        "language": "JavaScript",
-        "linesAdded": 25,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "dashboard/public/doctor.ps1",
-        "language": "PowerShell",
-        "linesAdded": 9,
-        "linesRemoved": 2,
-        "changeType": "modified"
-      },
-      {
-        "path": "dashboard/public/version.txt",
-        "language": null,
-        "linesAdded": 1,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "dist-r2/version.txt",
-        "language": null,
-        "linesAdded": 1,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "engine/src/prompt.ts",
-        "language": "TypeScript",
-        "linesAdded": 13,
-        "linesRemoved": 4,
-        "changeType": "modified"
-      },
-      {
-        "path": "engine/src/telemetry.ts",
-        "language": "TypeScript",
-        "linesAdded": 9,
-        "linesRemoved": 3,
+        "linesAdded": 129,
+        "linesRemoved": 42,
         "changeType": "modified"
       },
       {
         "path": "extension/CHANGELOG.md",
         "language": "Markdown",
-        "linesAdded": 84,
+        "linesAdded": 8,
         "linesRemoved": 0,
         "changeType": "modified"
       },
       {
         "path": "extension/package.json",
         "language": "JSON",
-        "linesAdded": 28,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/src/config.ts",
-        "language": "TypeScript",
-        "linesAdded": 3,
-        "linesRemoved": 0,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/src/extension.ts",
-        "language": "TypeScript",
-        "linesAdded": 293,
-        "linesRemoved": 5,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/src/status.ts",
-        "language": "TypeScript",
-        "linesAdded": 20,
-        "linesRemoved": 0,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/test/demo-green.js",
-        "language": "JavaScript",
-        "linesAdded": 5,
-        "linesRemoved": 1,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/test/live-theirs.js",
-        "language": "JavaScript",
-        "linesAdded": 38,
-        "linesRemoved": 5,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/test/live.js",
-        "language": "JavaScript",
-        "linesAdded": 19,
-        "linesRemoved": 44,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/test/qa.js",
-        "language": "JavaScript",
-        "linesAdded": 158,
-        "linesRemoved": 20,
-        "changeType": "modified"
-      },
-      {
-        "path": "extension/test/send-head.js",
-        "language": "JavaScript",
-        "linesAdded": 21,
-        "linesRemoved": 3,
-        "changeType": "modified"
-      },
-      {
-        "path": "selfhost/doctor.ps1",
-        "language": "PowerShell",
-        "linesAdded": 9,
-        "linesRemoved": 2,
-        "changeType": "modified"
-      },
-      {
-        "path": "selfhost/version.txt",
-        "language": null,
         "linesAdded": 1,
         "linesRemoved": 1,
         "changeType": "modified"
       },
       {
-        "path": "skill/references/ruleset.md",
-        "language": "Markdown",
-        "linesAdded": 9,
-        "linesRemoved": 4,
+        "path": "extension/src/extension.ts",
+        "language": "TypeScript",
+        "linesAdded": 14,
+        "linesRemoved": 11,
+        "changeType": "modified"
+      },
+      {
+        "path": "extension/test/qa.js",
+        "language": "JavaScript",
+        "linesAdded": 23,
+        "linesRemoved": 0,
         "changeType": "modified"
       }
     ]
@@ -192,32 +87,15 @@
     {
       "id": "f1",
       "file": "extension/src/extension.ts",
-      "lineStart": 701,
-      "lineEnd": 709,
+      "lineStart": 485,
+      "lineEnd": 492,
       "severity": "important",
       "category": "correctness",
-      "title": "`crTrack.hasHeld` is never set to true, so the send button never appears",
-      "description": "When the developer answers \"Wait\" (or dismisses), `this.held` is populated and they are told to \"send it from the Findings panel\", but the context key is only ever set to `false` (lines 464, 732). `package.json:211-212` gates the `crTrack.sendHeld` menu item on `when: view == crTrack.findings && crTrack.hasHeld`, so the button is never shown and the only way to send a held report is the command palette.",
-      "suggestion": "Setting the context key to `true` alongside `this.held` in `confirmSend` would make the button appear.",
-      "confidence": 0.92,
-      "hadPatch": true,
-      "status": "proposed",
-      "accepted": false,
-      "dismissReason": null,
-      "detectedBy": "llm"
-    },
-    {
-      "id": "f2",
-      "file": "extension/src/extension.ts",
-      "lineStart": 720,
-      "lineEnd": 721,
-      "severity": "nit",
-      "category": "correctness",
-      "title": "`sendHeld` returns silently when the endpoint has gone",
-      "description": "If `.cr-track.yaml` no longer resolves an endpoint (edited or removed between the hold and the send), the command returns with no message, no log line and the report still held — indistinguishable to the developer from a click that did nothing.",
-      "suggestion": "Telling the developer why nothing was sent, e.g. a `showWarningMessage` about no configured endpoint before returning, would make the failure visible.",
+      "title": "Held report is still discarded on paths where no review replaces it",
+      "description": "The discard now sits after the merge/no-source skips, but two later exits still abandon it with nothing taking its place: the empty-diff return at line 499-502 and the `result.error` return at line 520-524. In both cases `this.held` has already been set to `undefined` (and it is unrecoverable — `sendHeld` only reads `this.held`), so a failed or timed-out `runReview` on the fixing commit silently destroys the held findings.",
+      "suggestion": "Consider moving the discard block below the empty-diff check and the `result.error` early return — e.g. just before `this.display(...)`/`this.report(...)` — so the hold is only superseded once a review has actually produced findings for the new commit.",
       "confidence": 0.85,
-      "hadPatch": true,
+      "hadPatch": false,
       "status": "proposed",
       "accepted": false,
       "dismissReason": null,
@@ -226,25 +104,25 @@
   ],
   "changes": [],
   "summary": {
-    "findingsTotal": 2,
+    "findingsTotal": 1,
     "bySeverity": {
       "blocking": 0,
       "important": 1,
-      "nit": 1,
+      "nit": 0,
       "suggestion": 0
     },
     "byCategory": {
-      "correctness": 2
+      "correctness": 1
     },
     "applied": 0,
     "dismissed": 0,
-    "outstanding": 2,
-    "patchesOffered": 2,
+    "outstanding": 1,
+    "patchesOffered": 0,
     "reviewerTimeSavedMin": 0
   },
   "client": {
     "surface": "vscode-extension",
-    "extensionVersion": "0.11.0",
+    "extensionVersion": "0.12.1",
     "cliVersion": "2.1.245",
     "host": "DESKTOP-NBRJDA2",
     "os": "win32",
