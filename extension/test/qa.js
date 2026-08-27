@@ -1377,6 +1377,29 @@ export async function transfer(from: string, to: string, amount: any) {
       "the old findings would still be filed after the developer fixed them");
     r2();
 
+    // A commit that is not reviewed is not the fix the hold was waiting for.
+    // Discarding on one would drop the findings with nothing taking their
+    // place — the single outcome holding was never meant to produce.
+    const { state: s3, restore: r3 } = await boot(repo, {
+      confirmSends: true,
+      answers: { warning: ["Wait — I'll fix first"] },
+    });
+    posted.length = 0;
+    commit(repo, "bad again", { "src/payments.ts": BAD_SOURCE.replace("amount", "qty") });
+    await fireCommitWatcher(s3);
+    await waitFor(() => /holding the report/.test(logText(s3)), 300);
+    s3.logLines.length = 0;
+    commit(repo, "just docs", { "NOTES.md": "# notes\n" });
+    await fireCommitWatcher(s3);
+    check("A docs-only commit does not discard it",
+      !/Discarding the held report/.test(logText(s3)),
+      "still held",
+      "a commit that was never reviewed threw the held findings away");
+    await sleep(1_500);
+    check("...and still nothing was sent",
+      posted.length === 0, `${posted.length} POST(s)`);
+    r3();
+
     restore();
     server.close();
   }

@@ -453,17 +453,6 @@ class Session implements vscode.Disposable {
     // which is exactly how ignoring every finding becomes invisible.
     this.finalizePrevious();
 
-    // A held report is superseded by the commit that follows it. Holding meant
-    // "let me fix this first"; this is that fix arriving, and filing the old
-    // findings now would record problems the developer has already dealt with.
-    if (this.held) {
-      log.info(
-        `Discarding the held report for ${this.held.shortSha} — a newer commit supersedes it`,
-      );
-      this.held = undefined;
-      void vscode.commands.executeCommand("setContext", "crTrack.hasHeld", false);
-    }
-
     this.reviewing = true;
     const triggeredAt = new Date();
 
@@ -486,6 +475,20 @@ class Session implements vscode.Disposable {
         log.info(`${commit.shortSha} touches no source files — skipping`);
         this.status.idle(`${commit.shortSha}: nothing to review`);
         return;
+      }
+
+      // Only now is a held report superseded. Holding meant "let me fix this
+      // first", and this commit is that fix — but the skips above are not:
+      // discarding on a merge or a docs-only commit would drop the findings
+      // with no review taking their place, which is the one outcome the hold
+      // was never meant to produce.
+      if (this.held) {
+        log.info(
+          `Discarding the held report for ${this.held.shortSha} — ` +
+            `${commit.shortSha} supersedes it`,
+        );
+        this.held = undefined;
+        void vscode.commands.executeCommand("setContext", "crTrack.hasHeld", false);
       }
 
       const diff = await commitDiff(

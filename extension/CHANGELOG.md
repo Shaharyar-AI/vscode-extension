@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.1
+
+- A held report is no longer discarded by a commit that was never reviewed. The
+  discard ran before the merge and no-source-files checks, so holding findings
+  and then committing a README change threw them away with no review taking
+  their place — the one outcome holding was never meant to produce. Only a
+  commit that is actually reviewed supersedes a hold now.
+
 ## 0.12.0
 
 Fixes for defects CR-Track found in its own last eight releases.
