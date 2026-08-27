@@ -28,6 +28,8 @@ export { reconcile } from "./reconcile";
 import { FindingsTree } from "./tree";
 import {
   checkRepo,
+  collectDiff,
+  collectStats,
   commitDiff,
   commitStats,
   gitPath,
@@ -334,6 +336,87 @@ class Session implements vscode.Disposable {
         ? `Restored ${best.findings.length} finding(s) from the last review — ${left} still open`
         : `Restored the last review — all ${best.findings.length} finding(s) marked fixed`,
     );
+  }
+
+  /**
+   * Review what is staged, before it becomes a commit.
+   *
+   * Deliberately reports nothing to the dashboard. Nothing has happened yet —
+   * the developer is still deciding what to commit — and filing a review for
+   * work in progress would count against them twice: once now, and again when
+   * the commit that contains it is reviewed for real.
+   */
+  async reviewStaged(repoRoot: string): Promise<void> {
+    if (this.reviewing) {
+      log.info("A review is already running — skipping this one");
+      void vscode.window.showInformationMessage("CR-Track is already reviewing something.");
+      return;
+    }
+    this.reviewing = true;
+    try {
+      const context = await readRepoContext(repoRoot);
+      const stats = await collectStats(context, "staged");
+      const code = stats.files.filter((f) => isReviewableCode(f.path));
+      if (!code.length) {
+        log.info("Nothing reviewable is staged");
+        void vscode.window.showInformationMessage(
+          "CR-Track: nothing reviewable is staged. Stage the changes you want checked first.",
+        );
+        return;
+      }
+
+      const diff = await collectDiff(context, "staged");
+      if (!diff.trim()) {
+        void vscode.window.showInformationMessage("CR-Track: the staged diff is empty.");
+        return;
+      }
+
+      const cfg = this.settings(repoRoot);
+      log.info(
+        `Reviewing staged changes — ${code.length} file(s), ` +
+          `+${stats.linesAdded}/-${stats.linesRemoved}`,
+      );
+      this.status.busy("Reviewing staged changes");
+
+      const result = await runReview({
+        claudePath: this.claudePath,
+        repoRoot,
+        diff,
+        changedPaths: code.map((f) => f.path),
+        config: cfg,
+        referencesDir: this.referencesDir,
+      });
+
+      if (result.error) {
+        log.warn(`Staged review failed: ${result.error}`);
+        this.status.failed(result.error);
+        void vscode.window.showErrorMessage(`CR-Track: ${result.error}`);
+        return;
+      }
+
+      // Shown like any other review, but nothing is pushed and no review is
+      // recorded, so ticking a row here only clears it from the panel.
+      this.pushed = undefined;
+      this.display(result.findings, repoRoot, `staged-${Date.now()}`, [], [], false);
+      this.status.reviewed(result.findings.length, "staged");
+      log.info(
+        `Staged: ${result.findings.length} finding(s) in ` +
+          `${(result.durationMs / 1000).toFixed(0)}s — not reported, this is not a commit`,
+      );
+
+      if (result.findings.length) {
+        void vscode.commands.executeCommand("crTrack.findings.focus");
+        void vscode.window.showWarningMessage(
+          `CR-Track found ${result.findings.length} thing(s) in your staged changes. Fix them and commit clean.`,
+        );
+      } else {
+        void vscode.window.showInformationMessage(
+          "CR-Track: nothing found in your staged changes.",
+        );
+      }
+    } finally {
+      this.reviewing = false;
+    }
   }
 
   async reviewCommit(repoRoot: string, sha: string): Promise<void> {
@@ -1166,6 +1249,21 @@ function registerCommands(context: vscode.ExtensionContext, status: StatusBar): 
     const node = arg as { kind?: string; finding?: Finding } | undefined;
     return node?.kind === "finding" ? node.finding : undefined;
   };
+
+  register("crTrack.reviewStaged", async () => {
+    if (!session) await start(context, status);
+    if (!session) {
+      const choice = await vscode.window.showWarningMessage(
+        "CR-Track is inactive here.",
+        "Diagnose",
+      );
+      if (choice === "Diagnose") await vscode.commands.executeCommand("crTrack.diagnose");
+      return;
+    }
+    const root = session.tree.currentRepoRoot() || session.repos[0]?.root;
+    if (!root) return;
+    await session.reviewStaged(root);
+  });
 
   register("crTrack.update", async () => {
     // The host reports are sent to and the host the extension is downloaded

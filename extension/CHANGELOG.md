@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.0
+
+Review your work before it becomes a commit.
+
+- **A magnifier icon, first in the Findings panel title bar.** Stage what you
+  are about to commit, click it, and the same review runs against the staged
+  diff. Fix what it finds and commit clean.
+- **Nothing is reported.** Nothing has happened yet — you are still deciding
+  what to commit — and filing a review for work in progress would count against
+  you twice: once now, and again when the commit containing it is reviewed for
+  real. The log says so explicitly rather than leaving it to be inferred.
+- It does not commit, stage, or change anything on your behalf, and it does not
+  block a commit. Advisory, like every other finding this tool produces.
+
 ## 0.10.0
 
 An update button, so a new build is a click rather than a command to remember.

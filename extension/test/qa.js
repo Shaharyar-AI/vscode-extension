@@ -1177,6 +1177,72 @@ export async function transfer(from: string, to: string, amount: any) {
     server.close();
   }
 
+  section("6i. Reviewing before you commit");
+  if (FAST) {
+    skipped("Staged review", "needs the model");
+  } else {
+    const http = require("node:http");
+    const posted = [];
+    const server = http.createServer((req, res) => {
+      let b = ""; req.on("data", (c) => (b += c));
+      req.on("end", () => { posted.push(b); res.writeHead(200); res.end('{"ok":true}'); });
+    });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const endpoint = `http://127.0.0.1:${server.address().port}/api/ingest`;
+
+    const repo = makeRepo("staged");
+    fs.writeFileSync(path.join(repo, ".cr-track.yaml"), `endpoint: ${endpoint}
+`);
+    git(repo, "add", "-A");
+    git(repo, "commit", "-qm", "point at the test server");
+
+    const { state, restore } = await boot(repo);
+
+    // ---- nothing staged --------------------------------------------------
+    state.messages.length = 0;
+    await run(state, "crTrack.reviewStaged");
+    await waitFor(() => state.messages.length > 0);
+    check("Says so when nothing reviewable is staged",
+      /nothing reviewable is staged/i.test(state.messages[state.messages.length - 1]?.message || ""),
+      "asked to stage something first");
+
+    // ---- staged, but not committed ---------------------------------------
+    write(repo, { "src/payments.ts": BAD_SOURCE });
+    git(repo, "add", "src/payments.ts");
+    const headBefore = git(repo, "rev-parse", "HEAD").trim();
+    state.messages.length = 0;
+    state.logLines.length = 0;
+    await run(state, "crTrack.reviewStaged");
+    await waitFor(() => /Staged: \d+ finding/.test(logText(state)), 300);
+
+    const rows = (await walkTree(state)).filter((r) => r.kind === "finding");
+    check("Staged changes are reviewed without a commit", rows.length > 0,
+      `${rows.length} finding(s)`,
+      "staging and reviewing produced nothing");
+    check("...and no commit was made on the developer's behalf",
+      git(repo, "rev-parse", "HEAD").trim() === headBefore, "HEAD unmoved");
+
+    // The point of the whole feature: this must not reach the dashboard.
+    await sleep(2_000);
+    check("...and nothing is reported to the dashboard",
+      posted.length === 0, `${posted.length} POST(s)`,
+      "a review of work in progress was filed, and will be counted twice");
+    check("...which the log states, so it is not a silent omission",
+      /not reported, this is not a commit/.test(logText(state)), "logged");
+
+    // ---- committing the same code still reports normally -----------------
+    state.logLines.length = 0;
+    git(repo, "commit", "-qm", "add transfer");
+    await fireCommitWatcher(state);
+    await waitFor(() => posted.length > 0, 300);
+    check("Committing it afterwards does report, as usual",
+      posted.length === 1, `${posted.length} POST(s)`,
+      "the real commit was not reported");
+
+    restore();
+    server.close();
+  }
+
   section("7. The report reaches the dashboard");
   {
     const received = [];

@@ -2,7 +2,7 @@
   "name": "cr-track",
   "displayName": "CR-Track",
   "description": "Reviews every commit with Claude, shows the developer what to improve, and reports the outcome to your dashboard.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "ikonic",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -110,6 +110,12 @@
         "title": "Update to the latest version",
         "category": "CR-Track",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "crTrack.reviewStaged",
+        "title": "Review staged changes (before you commit)",
+        "category": "CR-Track",
+        "icon": "$(inspect)"
       }
     ],
     "viewsContainers": {
@@ -142,12 +148,12 @@
         {
           "command": "crTrack.copyAllFindings",
           "when": "view == crTrack.findings",
-          "group": "navigation@0"
+          "group": "navigation@1"
         },
         {
           "command": "crTrack.reviewLastCommit",
           "when": "view == crTrack.findings",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "crTrack.clearFindings",
@@ -172,12 +178,17 @@
         {
           "command": "crTrack.setIngestToken",
           "when": "view == crTrack.findings",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "crTrack.update",
           "when": "view == crTrack.findings",
-          "group": "navigation@3"
+          "group": "navigation@4"
+        },
+        {
+          "command": "crTrack.reviewStaged",
+          "when": "view == crTrack.findings",
+          "group": "navigation@0"
         }
       ],
       "commandPalette": [
